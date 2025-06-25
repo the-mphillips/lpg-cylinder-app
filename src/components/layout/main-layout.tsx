@@ -231,13 +231,21 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               <NavigationMenu>
                 <NavigationMenuList>
                   <NavigationMenuItem>
-                    <NavigationMenuTrigger className={`font-medium ${
-                      pathname.startsWith('/settings') ? 'text-foreground border-b-2 border-primary' : 'text-muted-foreground'
-                    }`}>
-                      <Link href="/settings" className="flex items-center">
+                    <div className="flex items-center">
+                      <Link
+                        href="/settings"
+                        className={`text-foreground transition-colors hover:text-foreground font-medium ${
+                          pathname.startsWith('/settings') ? 'text-foreground border-b-2 border-primary pb-1' : 'text-muted-foreground'
+                        }`}
+                      >
                         Settings
                       </Link>
-                    </NavigationMenuTrigger>
+                      <NavigationMenuTrigger className={`font-medium ml-1 ${
+                        pathname.startsWith('/settings') ? 'text-foreground' : 'text-muted-foreground'
+                      }`}>
+                        ▼
+                      </NavigationMenuTrigger>
+                    </div>
                     <NavigationMenuContent>
                       <div className="grid w-[500px] gap-3 p-4 md:w-[600px] md:grid-cols-2">
                         {settingsCategories.map((category) => {

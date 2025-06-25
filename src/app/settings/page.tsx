@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
-import { Settings, Users, Mail, Activity, FileText, Shield, Building2, Save, Plus, Trash2, Edit, Palette, Search, Upload, Eye, Signature } from 'lucide-react'
+import { Settings, Users, Mail, Activity, FileText, Building2, Save, Plus, Trash2, Edit, Palette, Search, Signature } from 'lucide-react'
 import { api } from '@/lib/trpc/client'
 import { toast } from 'sonner'
 import { UserEditModal } from '@/components/modals/user-edit-modal'
@@ -921,7 +921,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="app-settings" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">App Settings</span>
@@ -937,10 +937,6 @@ export default function SettingsPage() {
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             <span className="hidden sm:inline">Users</span>
-          </TabsTrigger>
-          <TabsTrigger value="signatories" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline">Signatories</span>
           </TabsTrigger>
           <TabsTrigger value="customers" className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
@@ -972,9 +968,7 @@ export default function SettingsPage() {
           <UserManagementTab />
         </TabsContent>
 
-        <TabsContent value="signatories">
-          <SignatoriesTestersTab />
-        </TabsContent>
+
 
         <TabsContent value="customers">
           <MajorCustomersTab />
