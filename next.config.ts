@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    // Enable CSS optimization for Tailwind v4
+    optimizeCss: true,
+  },
+  // Ensure proper CSS handling
+  transpilePackages: ['tailwindcss'],
 };
 
 export default nextConfig;
