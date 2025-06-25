@@ -301,7 +301,7 @@ export const adminRouter = createTRPCRouter({
     }))
     .query(async ({ input, ctx }) => {
       let query = ctx.supabaseService
-        .from('audit_logs_with_users') // Use the view that includes user information
+        .from('unified_logs_with_user_info') // Use the updated view with public.users
         .select('*')
         .order('created_at', { ascending: false })
         .range(input.offset, input.offset + input.limit - 1)
@@ -326,8 +326,8 @@ export const adminRouter = createTRPCRouter({
         query = query.lte('created_at', input.end_date)
       }
       if (input.search) {
-        // Search across message, action, and user email
-        query = query.or(`message.ilike.%${input.search}%, action.ilike.%${input.search}%, user_email.ilike.%${input.search}%`)
+        // Search across message, action, username, and user email
+        query = query.or(`message.ilike.%${input.search}%, action.ilike.%${input.search}%, username.ilike.%${input.search}%, user_email.ilike.%${input.search}%`)
       }
 
       const { data, error } = await query

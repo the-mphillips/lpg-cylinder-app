@@ -4,7 +4,6 @@ import React, { useState, useMemo } from 'react'
 import { format } from 'date-fns'
 import { 
   Globe, 
-  User, 
   Clock, 
   Filter, 
   Search, 
@@ -43,35 +42,53 @@ export interface UnifiedLogEntry {
   log_type: 'system' | 'user_activity' | 'email' | 'auth' | 'security' | 'api' | 'file_operation'
   level: 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL'
   action: string
-  message: string
+  message?: string | null
   
   // User information (populated from view)
   user_id?: string | null
+  username?: string | null
   user_email?: string | null
-  user_name?: string | null
+  first_name?: string | null
+  last_name?: string | null
   user_role?: string | null
-  full_name?: string | null
-  avatar_url?: string | null
+  user_display_name?: string | null
   
   // Network information
   ip_address?: string | null
   user_agent?: string | null
   request_method?: string | null
   request_path?: string | null
+  session_id?: string | null
   
   // Resource information
   resource_type?: string | null
   resource_id?: string | null
-  resource_name?: string | null
   
   // Event details (JSON)
-  details?: Record<string, any> | null
+  details?: Record<string, unknown> | null
+  before_state?: Record<string, unknown> | null
+  after_state?: Record<string, unknown> | null
+  error_details?: Record<string, unknown> | null
+  
+  // Email specific
+  email_to?: string[] | null
+  email_subject?: string | null
+  email_status?: string | null
   
   // Additional metadata
   module?: string | null
+  function_name?: string | null
+  line_number?: number | null
   correlation_id?: string | null
-  is_sensitive?: boolean
-  is_system_generated?: boolean
+  parent_log_id?: string | null
+  duration_ms?: number | null
+  tags?: string[] | null
+  sensitive_data?: boolean
+  retention_policy?: string | null
+  
+  // Legacy mapping
+  legacy_table?: string | null
+  legacy_id?: number | null
 }
 
 interface UnifiedLogsTableProps {
@@ -143,10 +160,11 @@ export function UnifiedLogsTable({ logs, isLoading = false, onRefresh, title = "
   const filteredLogs = useMemo(() => {
     return logs.filter(log => {
       const matchesSearch = searchTerm === '' || 
-        log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (log.message && log.message.toLowerCase().includes(searchTerm.toLowerCase())) ||
         log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.user_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.ip_address?.includes(searchTerm)
+        (log.username && log.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (log.user_email && log.user_email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (log.ip_address && log.ip_address.includes(searchTerm))
 
       const matchesLevel = levelFilter === 'all' || log.level === levelFilter
       const matchesType = typeFilter === 'all' || log.log_type === typeFilter
@@ -191,19 +209,24 @@ export function UnifiedLogsTable({ logs, isLoading = false, onRefresh, title = "
       )
     }
 
+    const displayName = log.user_display_name || 
+                       (log.first_name && log.last_name ? `${log.first_name} ${log.last_name}` : '') ||
+                       log.username || 
+                       log.user_email || 
+                       'Unknown User'
+
     return (
       <div className="flex items-center gap-3">
         <Avatar className="h-8 w-8">
-          <AvatarImage src={log.avatar_url || undefined} />
           <AvatarFallback className="text-xs">
-            {getUserInitials(log.full_name || log.user_name, log.user_email)}
+            {getUserInitials(displayName, log.user_email)}
           </AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium text-gray-900 truncate">
-            {log.full_name || log.user_name || log.user_email}
+            {displayName}
           </div>
-          {(log.full_name || log.user_name) && log.user_email && (
+          {displayName !== log.user_email && log.user_email && (
             <div className="text-xs text-gray-500 truncate">
               {log.user_email}
             </div>
@@ -343,12 +366,6 @@ export function UnifiedLogsTable({ logs, isLoading = false, onRefresh, title = "
                   <div className="text-gray-600 font-mono">{log.resource_id}</div>
                 </div>
               )}
-              {log.resource_name && (
-                <div className="col-span-2">
-                  <span className="font-medium">Name:</span>
-                  <div className="text-gray-600">{log.resource_name}</div>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -382,13 +399,13 @@ export function UnifiedLogsTable({ logs, isLoading = false, onRefresh, title = "
                   <div className="text-gray-600 font-mono text-xs">{log.correlation_id}</div>
                 </div>
               )}
-              <div>
-                <span className="font-medium">Generated By:</span>
-                <div className="text-gray-600">
-                  {log.is_system_generated ? 'System' : 'User Action'}
+              {log.function_name && (
+                <div>
+                  <span className="font-medium">Function:</span>
+                  <div className="text-gray-600">{log.function_name}</div>
                 </div>
-              </div>
-              {log.is_sensitive && (
+              )}
+              {log.sensitive_data && (
                 <div>
                   <span className="font-medium">Sensitive:</span>
                   <div className="text-red-600">Contains sensitive data</div>
