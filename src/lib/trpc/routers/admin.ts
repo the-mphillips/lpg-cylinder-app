@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { authedProcedure, adminProcedure, createTRPCRouter } from '../server'
 import { TRPCError } from '@trpc/server'
+import { logSettingsUpdate } from '@/lib/utils/logging'
 
 export const adminRouter = createTRPCRouter({
   // User Management
@@ -285,6 +286,59 @@ export const adminRouter = createTRPCRouter({
       }
     }),
 
+  // Unified Audit Logs (NEW - replaces system_logs, activity_logs, email_logs)
+  getUnifiedLogs: adminProcedure
+    .input(z.object({
+      limit: z.number().int().min(1).max(100).default(50),
+      offset: z.number().int().min(0).default(0),
+      log_type: z.enum(['system', 'user_activity', 'email', 'auth', 'security', 'api', 'file_operation']).optional(),
+      level: z.enum(['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']).optional(),
+      user_id: z.string().uuid().optional(),
+      action: z.string().optional(),
+      search: z.string().optional(),
+      start_date: z.string().optional(),
+      end_date: z.string().optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      let query = ctx.supabaseService
+        .from('audit_logs_with_users') // Use the view that includes user information
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(input.offset, input.offset + input.limit - 1)
+
+      // Apply filters
+      if (input.log_type) {
+        query = query.eq('log_type', input.log_type)
+      }
+      if (input.level) {
+        query = query.eq('level', input.level)
+      }
+      if (input.user_id) {
+        query = query.eq('user_id', input.user_id)
+      }
+      if (input.action) {
+        query = query.eq('action', input.action)
+      }
+      if (input.start_date) {
+        query = query.gte('created_at', input.start_date)
+      }
+      if (input.end_date) {
+        query = query.lte('created_at', input.end_date)
+      }
+      if (input.search) {
+        // Search across message, action, and user email
+        query = query.or(`message.ilike.%${input.search}%, action.ilike.%${input.search}%, user_email.ilike.%${input.search}%`)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+      }
+
+      return data || []
+    }),
+
   // System Logs
   getSystemLogs: adminProcedure
     .input(z.object({
@@ -402,7 +456,18 @@ export const adminRouter = createTRPCRouter({
       value: z.unknown(), // Allow any JSON value
     }))
     .mutation(async ({ input, ctx }) => {
+      let oldValue = ''
+      
       if (input.id) {
+        // Get the old value first for logging
+        const { data: existing } = await ctx.supabaseService
+          .from('app_settings')
+          .select('value, category, key')
+          .eq('id', input.id)
+          .single()
+        
+        oldValue = existing ? JSON.stringify(existing.value) : ''
+        
         // Update by ID
         const { data, error } = await ctx.supabaseService
           .from('app_settings')
@@ -419,8 +484,30 @@ export const adminRouter = createTRPCRouter({
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
         }
 
+        // Log the settings update
+        if (ctx.user?.id && ctx.user?.email && existing) {
+          await logSettingsUpdate(
+            ctx.user.id,
+            ctx.user.email,
+            existing.category,
+            existing.key,
+            oldValue,
+            JSON.stringify(input.value)
+          )
+        }
+
         return data
       } else if (input.category && input.key) {
+        // Get the old value first for logging
+        const { data: existing } = await ctx.supabaseService
+          .from('app_settings')
+          .select('value')
+          .eq('category', input.category)
+          .eq('key', input.key)
+          .maybeSingle()
+        
+        oldValue = existing ? JSON.stringify(existing.value) : ''
+        
         // Update or insert by category and key
         const { data, error } = await ctx.supabaseService
           .from('app_settings')
@@ -438,6 +525,18 @@ export const adminRouter = createTRPCRouter({
 
         if (error) {
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+        }
+
+        // Log the settings update
+        if (ctx.user?.id && ctx.user?.email) {
+          await logSettingsUpdate(
+            ctx.user.id,
+            ctx.user.email,
+            input.category,
+            input.key,
+            oldValue,
+            JSON.stringify(input.value)
+          )
         }
 
         return data
@@ -493,7 +592,7 @@ export const adminRouter = createTRPCRouter({
     }
 
     // Convert array of settings to object
-    const brandingSettings: Record<string, any> = {}
+    const brandingSettings: Record<string, unknown> = {}
     data?.forEach(setting => {
       try {
         brandingSettings[setting.key] = typeof setting.value === 'string' 

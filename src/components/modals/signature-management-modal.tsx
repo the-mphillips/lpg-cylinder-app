@@ -21,7 +21,7 @@ import {
   Download,
   RefreshCw
 } from 'lucide-react'
-import { uploadUserSignature, deleteFile, getSignedUrl } from '@/lib/supabase/storage'
+import { uploadUserSignature, deleteFile, buildSignatureUrl } from '@/lib/supabase/storage'
 import Image from 'next/image'
 
 interface SignatureModalProps {
@@ -55,20 +55,12 @@ export function SignatureManagementModal({
   // Load signature when user changes
   useEffect(() => {
     if (user?.signature) {
-      loadSignatureUrl(user.signature)
+      const url = buildSignatureUrl(user.signature)
+      setSignatureUrl(url)
     } else {
       setSignatureUrl(null)
     }
   }, [user])
-
-  const loadSignatureUrl = async (signaturePath: string) => {
-    try {
-      const url = await getSignedUrl('user-data', signaturePath, 3600)
-      setSignatureUrl(url)
-    } catch (error) {
-      console.error('Error loading signature:', error)
-    }
-  }
 
   const validateFile = (file: File): string | null => {
     // Check file type
@@ -142,7 +134,8 @@ export function SignatureManagementModal({
         
         // Reload signature display
         if (result.path) {
-          await loadSignatureUrl(result.path)
+          const url = buildSignatureUrl(result.path)
+          setSignatureUrl(url)
         }
       } else {
         setMessage({ type: 'error', text: result.error || 'Upload failed' })

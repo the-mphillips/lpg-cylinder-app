@@ -175,6 +175,139 @@ export async function POST(request: NextRequest) {
 
 
 
+export async function DELETE(request: NextRequest) {
+  try {
+    // 1. Check authentication with Supabase
+    const supabase = getServiceClient()
+    
+    // Get auth token from header
+    const authHeader = request.headers.get('Authorization')
+    const authToken = authHeader?.replace('Bearer ', '')
+    
+    if (!authToken) {
+      return NextResponse.json(
+        { success: false, error: 'Authentication token required' },
+        { status: 401 }
+      )
+    }
+
+    // Verify the user session
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authToken)
+    
+    if (authError || !user) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid authentication' },
+        { status: 401 }
+      )
+    }
+
+    // Get user profile for role checking
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('email', user.email)
+      .single()
+
+    const userRole = userProfile?.role || 'Tester'
+
+    // 2. Parse request body
+    const body = await request.json()
+    const fileUrl = body.fileUrl as string
+
+    if (!fileUrl) {
+      return NextResponse.json(
+        { success: false, error: 'File URL required' },
+        { status: 400 }
+      )
+    }
+
+    // Extract file path from URL for storage deletion
+    const urlParts = fileUrl.split('/')
+    const fileName = urlParts[urlParts.length - 1]
+    const pathParts = urlParts.slice(-2) // Get folder and filename
+    const folderName = pathParts[0]
+    
+    // Determine type and subType from folder structure
+    let type: 'branding' | 'signature'
+    let subType: string
+    
+    if (folderName === 'signatures') {
+      type = 'signature'
+      subType = 'signature'
+    } else if (folderName === 'branding') {
+      type = 'branding'
+      // Try to determine subType from filename or folder structure
+      if (fileName.includes('logo-dark') || fileName.includes('dark')) {
+        subType = 'logo-dark'
+      } else if (fileName.includes('logo')) {
+        subType = 'logo'
+      } else if (fileName.includes('favicon')) {
+        subType = 'favicon'
+      } else {
+        subType = 'general'
+      }
+    } else {
+      return NextResponse.json(
+        { success: false, error: 'Unknown file type' },
+        { status: 400 }
+      )
+    }
+
+    // 3. Check permissions
+    if (type === 'branding' && !['Admin', 'Super Admin'].includes(userRole)) {
+      return NextResponse.json(
+        { success: false, error: 'Insufficient permissions for branding file deletion' },
+        { status: 403 }
+      )
+    }
+
+    // 4. Determine bucket and file path
+    let bucketName: string
+    let filePath: string
+    
+    if (type === 'signature') {
+      bucketName = 'user-data'
+      filePath = `signatures/${fileName}`
+    } else {
+      bucketName = 'app-data'
+      filePath = `${folderName}/${fileName}`
+    }
+
+    // 5. Delete from Supabase Storage
+    const { error } = await supabase.storage
+      .from(bucketName)
+      .remove([filePath])
+
+    if (error) {
+      console.error('Storage delete error:', error)
+      return NextResponse.json(
+        { success: false, error: `Delete failed: ${error.message}` },
+        { status: 500 }
+      )
+    }
+
+    // 6. Clear branding settings if it's a logo deletion
+    if (type === 'branding' && subType) {
+      await clearBrandingSetting(subType)
+    }
+
+    // 7. Log the deletion (optional - for audit trail)
+    await logFileDelete(user.id, type, filePath, fileName)
+
+    return NextResponse.json({
+      success: true,
+      message: 'File deleted successfully'
+    })
+
+  } catch (error) {
+    console.error('Delete API error:', error)
+    return NextResponse.json(
+      { success: false, error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
 // Helper function to log file uploads (optional)
 async function logFileUpload(userId: string, type: string, path: string, fileName: string) {
   try {
@@ -182,6 +315,16 @@ async function logFileUpload(userId: string, type: string, path: string, fileNam
     console.log(`File uploaded by ${userId}: ${type}/${fileName} -> ${path}`)
   } catch (error) {
     console.error('Failed to log upload:', error)
+  }
+}
+
+// Helper function to log file deletions (optional)
+async function logFileDelete(userId: string, type: string, path: string, fileName: string) {
+  try {
+    // You can implement audit logging here if needed
+    console.log(`File deleted by ${userId}: ${type}/${fileName} -> ${path}`)
+  } catch (error) {
+    console.error('Failed to log deletion:', error)
   }
 }
 
@@ -222,5 +365,45 @@ async function saveBrandingSetting(subType: string, publicUrl: string) {
     }
   } catch (error) {
     console.error('Failed to save branding setting:', error)
+  }
+}
+
+// Helper function to clear branding settings
+async function clearBrandingSetting(subType: string) {
+  try {
+    const supabase = getServiceClient()
+    
+    // Map subType to app_settings key
+    const keyMap: Record<string, string> = {
+      'logo': 'logo_light_url',
+      'logo-dark': 'logo_dark_url',
+      'favicon': 'favicon_url'
+    }
+    
+    const settingKey = keyMap[subType]
+    if (!settingKey) {
+      console.warn(`Unknown branding subType: ${subType}`)
+      return
+    }
+    
+    // Update the app_settings table to clear the value
+    const { error } = await supabase
+      .from('app_settings')
+      .upsert({
+        category: 'branding',
+        key: settingKey,
+        value: JSON.stringify(''),
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'category,key'
+      })
+    
+    if (error) {
+      console.error('Failed to clear branding setting:', error)
+    } else {
+      console.log(`✅ Cleared app setting: branding.${settingKey}`)
+    }
+  } catch (error) {
+    console.error('Failed to clear branding setting:', error)
   }
 } 

@@ -79,7 +79,7 @@ const settingsCategories = [
   { 
     href: "/settings?tab=email", 
     title: "Email Settings", 
-    description: "Configure SMTP and email notifications",
+    description: "Configure SMTP, notifications and email logs",
     icon: Mail
   },
   { 

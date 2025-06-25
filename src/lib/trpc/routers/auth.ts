@@ -4,6 +4,7 @@ import { isUsernameAvailable, isEmailAvailable, getUserDisplayName, createUser, 
 import { UserRole, getRolePermissions } from '@/lib/types/database'
 import { createClient } from '@/lib/supabase/client'
 import isEmail from 'validator/lib/isEmail'
+import { logAuthEvent } from '@/lib/utils/logging'
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(async ({ ctx }) => {
@@ -45,20 +46,28 @@ export const authRouter = createTRPCRouter({
       }
 
       // Now, sign in with the email and password.
-      const { error } = await ctx.supabase.auth.signInWithPassword({
+      const { data, error } = await ctx.supabase.auth.signInWithPassword({
         email: email,
         password: input.password,
       });
 
       if (error) {
+        // Log failed login attempt
+        await logAuthEvent('LOGIN', undefined, email, ctx.req, false)
         // Provide a generic error to avoid leaking information.
         throw new Error('Invalid username or password');
       }
+
+      // Log successful login
+      await logAuthEvent('LOGIN', data.user?.id, email, ctx.req, true)
 
       return { success: true };
     }),
 
   logout: authedProcedure.mutation(async ({ ctx }) => {
+    // Log logout attempt
+    await logAuthEvent('LOGOUT', ctx.user?.id, ctx.user?.email, ctx.req, true)
+    
     const { error } = await ctx.supabase.auth.signOut()
     if (error) {
       throw new Error('Failed to logout')

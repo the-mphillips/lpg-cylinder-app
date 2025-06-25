@@ -66,8 +66,6 @@ export async function checkStorageBuckets(): Promise<void> {
   }
 }
 
-
-
 /**
  * Upload file via API route with progress callback
  */
@@ -75,6 +73,7 @@ export async function uploadFileViaAPI(
   file: File, 
   type: 'branding' | 'signature', 
   subType?: string,
+  userId?: string,
   onProgress?: (progress: number) => void
 ): Promise<UploadResult> {
   try {
@@ -84,6 +83,13 @@ export async function uploadFileViaAPI(
     if (subType) {
       formData.append('subType', subType)
     }
+    if (userId) {
+      formData.append('userId', userId)
+    }
+
+    // Get auth token from Supabase client
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
 
     // Create XMLHttpRequest for progress tracking
     return new Promise((resolve) => {
@@ -118,6 +124,12 @@ export async function uploadFileViaAPI(
       })
 
       xhr.open('POST', '/api/upload')
+      
+      // Add auth header if available
+      if (session?.access_token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${session.access_token}`)
+      }
+      
       xhr.send(formData)
     })
   } catch (error) {
@@ -137,7 +149,7 @@ export async function uploadUserSignature(
   userId: string,
   onProgress?: (progress: number) => void
 ): Promise<UploadResult> {
-  return uploadFileViaAPI(file, 'signature', userId, onProgress)
+  return uploadFileViaAPI(file, 'signature', undefined, userId, onProgress)
 }
 
 /**
@@ -148,7 +160,7 @@ export async function uploadBrandingImage(
   type: 'logo' | 'logo-dark' | 'favicon',
   onProgress?: (progress: number) => void
 ): Promise<UploadResult> {
-  return uploadFileViaAPI(file, 'branding', type, onProgress)
+  return uploadFileViaAPI(file, 'branding', type, undefined, onProgress)
 }
 
 /**
@@ -204,6 +216,31 @@ export async function getSignedUrl(bucket: string, path: string, expiresIn: numb
 }
 
 /**
+ * Build full public URL for signature files
+ */
+export function buildSignatureUrl(signaturePath: string): string {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!supabaseUrl) {
+    console.error('NEXT_PUBLIC_SUPABASE_URL not configured')
+    return signaturePath
+  }
+  
+  // If it's already a full URL, return as is
+  if (signaturePath.startsWith('http')) {
+    return signaturePath
+  }
+  
+  // Remove any leading slash if present
+  const cleanPath = signaturePath.startsWith('/') ? signaturePath.slice(1) : signaturePath
+  
+  // If the path doesn't start with 'signatures/', prepend it
+  const fullPath = cleanPath.startsWith('signatures/') ? cleanPath : `signatures/${cleanPath}`
+  
+  // Build the full public URL
+  return `${supabaseUrl}/storage/v1/object/public/user-data/${fullPath}`
+}
+
+/**
  * Upload file to specified bucket (legacy - kept for backwards compatibility)
  */
 export async function uploadFile(
@@ -214,7 +251,7 @@ export async function uploadFile(
   
   // Try to determine type from bucket name
   const type = bucketName === 'app-data' ? 'branding' : 'signature'
-  return uploadFileViaAPI(file, type, undefined, undefined)
+  return uploadFileViaAPI(file, type, undefined, undefined, undefined)
 }
 
 /**
@@ -229,7 +266,7 @@ export async function uploadDigitalSignature(file: File, userId: string): Promis
  */
 export async function uploadReportAttachment(file: File, reportId: string): Promise<UploadResult> {
   // For now, treat as signature type - you might want to add a 'report' type later
-  return uploadFileViaAPI(file, 'signature', reportId)
+  return uploadFileViaAPI(file, 'signature', reportId, undefined, undefined)
 }
 
 /**
