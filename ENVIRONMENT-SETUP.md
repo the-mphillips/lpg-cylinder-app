@@ -263,4 +263,46 @@ After successful environment setup, you'll have:
 ---
 
 **Last Updated**: December 2024  
-**Status**: Environment Setup Required 
+**Status**: Environment Setup Required
+
+## Quick Setup
+
+1. **Copy Environment Variables**
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. **Configure Supabase**
+   - Update `NEXT_PUBLIC_SUPABASE_URL` with your Supabase project URL
+   - Update `NEXT_PUBLIC_SUPABASE_ANON_KEY` with your Supabase anon key
+   - Update `SUPABASE_SERVICE_ROLE_KEY` with your service role key
+
+3. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+4. **Run Development Server**
+   ```bash
+   npm run dev
+   ```
+
+## Important Notes
+
+### Supabase Image Configuration
+The `next.config.ts` file is already configured to allow images from Supabase storage. If you're using a different Supabase project, the configuration will automatically use the hostname from your `NEXT_PUBLIC_SUPABASE_URL` environment variable.
+
+If you encounter "hostname not configured" errors with Next.js Image component:
+1. Ensure your `NEXT_PUBLIC_SUPABASE_URL` is correctly set in `.env.local`
+2. Restart the development server after any config changes
+3. The app supports images from the `/storage/v1/object/public/**` path pattern
+
+### File Upload Configuration
+Make sure your Supabase storage bucket `app-data` has the following structure:
+```
+app-data/
+├── branding/         # Logo, favicon uploads
+└── signatures/       # Digital signature files
+```
+
+Both buckets should be configured as public for the upload functionality to work correctly. 

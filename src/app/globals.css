@@ -33,6 +33,12 @@
   --bwa-secondary: 25 96% 56%; /* #F79226 */
   --bwa-light-gray: 0 0% 98%;
   --bwa-medium-gray: 0 0% 92%;
+
+  /* Dynamic Brand Colors (will be set by JavaScript) */
+  --brand-primary: 61 61 61; /* Default #3D3D3D as RGB */
+  --brand-secondary: 247 146 38; /* Default #F79226 as RGB */
+  --brand-primary-hex: #3D3D3D;
+  --brand-secondary-hex: #F79226;
 }
 
 .dark {
@@ -66,6 +72,8 @@
   --bwa-secondary: 25 96% 60%; /* Brighter orange for dark mode */
   --bwa-light-gray: 0 0% 15%;
   --bwa-medium-gray: 0 0% 25%;
+
+  /* Dynamic Brand Colors are inherited from light mode */
 }
 
 @theme {
@@ -189,6 +197,42 @@
 
   .animate-fade-in {
     animation: fadeIn 0.3s ease-in-out;
+  }
+
+  /* Dynamic Brand Button Theming */
+  .btn-brand-primary {
+    background-color: rgb(var(--brand-primary));
+    color: white;
+  }
+
+  .btn-brand-primary:hover {
+    background-color: rgb(var(--brand-primary) / 0.9);
+  }
+
+  .btn-brand-secondary {
+    background-color: rgb(var(--brand-secondary));
+    color: white;
+  }
+
+  .btn-brand-secondary:hover {
+    background-color: rgb(var(--brand-secondary) / 0.9);
+  }
+
+  /* Override Shadcn button default for branded buttons */
+  .btn-branded {
+    background-color: rgb(var(--brand-secondary)) !important;
+    color: white !important;
+    border-color: rgb(var(--brand-secondary)) !important;
+  }
+
+  .btn-branded:hover {
+    background-color: rgb(var(--brand-secondary) / 0.9) !important;
+    border-color: rgb(var(--brand-secondary) / 0.9) !important;
+  }
+
+  .btn-branded:focus {
+    outline: 2px solid rgb(var(--brand-secondary) / 0.5);
+    outline-offset: 2px;
   }
 
   /* Status indicators */

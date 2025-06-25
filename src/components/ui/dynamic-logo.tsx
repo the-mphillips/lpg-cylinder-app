@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
-import { useTheme } from '@/components/providers/theme-provider'
+import { useTheme } from 'next-themes'
 import { createClient } from '@/lib/supabase/client'
 
 interface BrandingSettings {
@@ -17,7 +17,7 @@ interface BrandingSettings {
 interface DynamicLogoProps {
   className?: string
   fallbackText?: string
-  size?: 'sm' | 'md' | 'lg' | 'xl'
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'xxl'
   showCompanyName?: boolean
   forceTheme?: 'light' | 'dark'
 }

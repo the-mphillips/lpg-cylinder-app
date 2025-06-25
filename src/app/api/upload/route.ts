@@ -3,7 +3,7 @@ import { getServiceClient } from '@/lib/supabase/service'
 
 // File type and size validation
 const ALLOWED_TYPES = {
-  branding: ['image/jpeg', 'image/png', 'image/svg+xml', 'image/webp'],
+  branding: ['image/jpeg', 'image/png', 'image/svg+xml', 'image/webp', 'image/x-icon', 'image/vnd.microsoft.icon'],
   signature: ['image/jpeg', 'image/png', 'image/svg+xml']
 }
 
@@ -19,22 +19,38 @@ const SIZE_LIMITS = {
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Check authentication with cookies (simplified for now)
-    const sessionCookie = request.cookies.get('session')
-    if (!sessionCookie) {
+    // 1. Check authentication with Supabase
+    const supabase = getServiceClient()
+    
+    // Get auth token from header or cookie
+    const authHeader = request.headers.get('Authorization')
+    const authToken = authHeader?.replace('Bearer ', '')
+    
+    if (!authToken) {
       return NextResponse.json(
-        { success: false, error: 'Authentication required' },
+        { success: false, error: 'Authentication token required' },
         { status: 401 }
       )
     }
 
-    // For now, we'll assume the user is authenticated if they have a session cookie
-    // In a real implementation, you'd validate the session properly
-    const user = {
-      id: 'user-123',
-      username: 'authenticated-user',
-      role: 'Admin' // For signature uploads, we need at least basic auth
+    // Verify the user session
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authToken)
+    
+    if (authError || !user) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid authentication' },
+        { status: 401 }
+      )
     }
+
+    // Get user profile for role checking
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('role')
+      .eq('email', user.email)
+      .single()
+
+    const userRole = userProfile?.role || 'Tester'
 
     // 2. Parse form data
     const formData = await request.formData()
@@ -73,7 +89,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Check permissions
-    if (type === 'branding' && !['Admin', 'Super Admin'].includes(user.role)) {
+    if (type === 'branding' && !['Admin', 'Super Admin'].includes(userRole)) {
       return NextResponse.json(
         { success: false, error: 'Insufficient permissions for branding uploads' },
         { status: 403 }
@@ -88,7 +104,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Upload to Supabase Storage
-    const supabase = getServiceClient()
     
     let bucketName: string
     let filePath: string

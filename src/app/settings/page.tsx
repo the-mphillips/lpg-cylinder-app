@@ -180,9 +180,8 @@ function AppSettingsTab() {
                       </div>
                       <div className="flex items-center gap-2">
                         {!isEditing ? (
-                          <Button 
-                            size="sm" 
-                            variant="outline"
+                          <button 
+                            className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
                             onClick={(e) => {
                               e.stopPropagation()
                               handleStartCategoryEdit(category)
@@ -190,11 +189,11 @@ function AppSettingsTab() {
                           >
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
-                          </Button>
+                          </button>
                         ) : (
                           <div className="flex gap-2">
-                            <Button 
-                              size="sm"
+                            <button 
+                              className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-3"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleSaveCategory(category)
@@ -203,17 +202,16 @@ function AppSettingsTab() {
                             >
                               <Save className="h-4 w-4 mr-2" />
                               Save
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
+                            </button>
+                            <button 
+                              className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleCancelCategoryEdit(category)
                               }}
                             >
                               Cancel
-                            </Button>
+                            </button>
                           </div>
                         )}
                       </div>

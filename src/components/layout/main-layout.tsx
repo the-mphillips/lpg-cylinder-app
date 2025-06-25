@@ -112,6 +112,41 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
     }
   )
 
+  // Get branding settings for company name and theming
+  const { data: brandingSettings } = api.admin.getBrandingSettings.useQuery(
+    undefined,
+    { 
+      enabled: !isLoginPage,
+      retry: false
+    }
+  )
+
+  // Apply dynamic theming based on branding settings
+  useEffect(() => {
+    if (brandingSettings && typeof document !== 'undefined') {
+      const root = document.documentElement
+      if (brandingSettings.secondary_color) {
+        // Convert hex to RGB for CSS custom properties
+        const hex = brandingSettings.secondary_color.replace('#', '')
+        const r = parseInt(hex.substring(0, 2), 16)
+        const g = parseInt(hex.substring(2, 4), 16)
+        const b = parseInt(hex.substring(4, 6), 16)
+        
+        root.style.setProperty('--brand-secondary', `${r} ${g} ${b}`)
+        root.style.setProperty('--brand-secondary-hex', brandingSettings.secondary_color)
+      }
+      if (brandingSettings.primary_color) {
+        const hex = brandingSettings.primary_color.replace('#', '')
+        const r = parseInt(hex.substring(0, 2), 16)
+        const g = parseInt(hex.substring(2, 4), 16)
+        const b = parseInt(hex.substring(4, 6), 16)
+        
+        root.style.setProperty('--brand-primary', `${r} ${g} ${b}`)
+        root.style.setProperty('--brand-primary-hex', brandingSettings.primary_color)
+      }
+    }
+  }, [brandingSettings])
+
   useEffect(() => {
     if (isLoginPage) {
       setLoading(false)
@@ -201,8 +236,12 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             href="/dashboard"
             className="flex items-center gap-3 text-lg font-semibold"
           >
-            <DynamicLogo size="lg" className="mr-1" />
-            <span className="hidden sm:inline-block font-bold text-xl">BWA Gas</span>
+            <DynamicLogo size="xxl" className="mr-1" />
+            {!brandingSettings?.logo_light_url && (
+              <span className="hidden sm:inline-block font-bold text-xl">
+                {brandingSettings?.company_name || 'BWA GAS'}
+              </span>
+            )}
           </Link>
         </div>
 
@@ -231,21 +270,16 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
               <NavigationMenu>
                 <NavigationMenuList>
                   <NavigationMenuItem>
-                    <div className="flex items-center">
+                    <NavigationMenuTrigger className={`font-medium ${
+                      pathname.startsWith('/settings') ? 'text-foreground border-b-2 border-primary pb-1' : 'text-muted-foreground'
+                    }`}>
                       <Link
                         href="/settings"
-                        className={`text-foreground transition-colors hover:text-foreground font-medium ${
-                          pathname.startsWith('/settings') ? 'text-foreground border-b-2 border-primary pb-1' : 'text-muted-foreground'
-                        }`}
+                        className="text-foreground transition-colors hover:text-foreground font-medium"
                       >
                         Settings
                       </Link>
-                      <NavigationMenuTrigger className={`font-medium ml-1 ${
-                        pathname.startsWith('/settings') ? 'text-foreground' : 'text-muted-foreground'
-                      }`}>
-                        ▼
-                      </NavigationMenuTrigger>
-                    </div>
+                    </NavigationMenuTrigger>
                     <NavigationMenuContent>
                       <div className="grid w-[500px] gap-3 p-4 md:w-[600px] md:grid-cols-2">
                         {settingsCategories.map((category) => {
@@ -279,7 +313,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         {/* Right side - Actions and User Menu */}
         <div className="flex items-center gap-4 ml-auto">
           {/* New Report Button */}
-          <Button asChild size="sm">
+          <Button asChild size="sm" className="btn-branded">
             <Link href="/reports/new">
               <FilePlus className="h-4 w-4 mr-2" />
               New Report
@@ -364,7 +398,9 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                 className="flex items-center gap-2 text-lg font-semibold mb-4"
               >
                 <DynamicLogo size="md" className="mr-2" />
-                <span>BWA Gas</span>
+                {!brandingSettings?.logo_light_url && (
+                  <span>{brandingSettings?.company_name || 'BWA Gas'}</span>
+                )}
               </Link>
               
               <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
