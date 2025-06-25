@@ -3,6 +3,25 @@ import { authedProcedure, adminProcedure, createTRPCRouter } from '../server'
 import { TRPCError } from '@trpc/server'
 import { logSettingsUpdate } from '@/lib/utils/logging'
 
+// Helper function to get descriptions for email settings
+function getEmailSettingDescription(key: string): string {
+  const descriptions: Record<string, string> = {
+    smtp_host: 'SMTP server hostname',
+    smtp_port: 'SMTP server port',
+    smtp_username: 'SMTP authentication username',
+    smtp_password: 'SMTP authentication password (encrypted)',
+    from_email: 'Default sender email address',
+    from_name: 'Default sender name',
+    reply_to_email: 'Reply-to email address',
+    email_signature: 'Email signature template',
+    use_tls: 'Enable TLS encryption',
+    use_ssl: 'Enable SSL encryption',
+    is_enabled: 'Enable/disable email functionality',
+    subject_prefix: 'Email subject prefix'
+  }
+  return descriptions[key] || `Email setting: ${key}`
+}
+
 export const adminRouter = createTRPCRouter({
   // User Management
   getAllUsers: adminProcedure.query(async ({ ctx }) => {
@@ -215,75 +234,105 @@ export const adminRouter = createTRPCRouter({
   // Email Configuration 
   getEmailSettings: adminProcedure.query(async ({ ctx }) => {
     const { data, error } = await ctx.supabaseService
-      .from('email_settings')
-      .select('*')
-      .limit(1)
-      .single()
+      .from('app_settings')
+      .select('key, value')
+      .eq('category', 'email')
 
-    if (error && error.code !== 'PGRST116') { // Not found is OK
+    if (error) {
       throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
     }
 
-    return data || {
-      smtp_server: '',
-      smtp_port: 587,
-      smtp_username: '',
-      smtp_password: '',
-      from_email: '',
-      from_name: '',
-      use_tls: true,
-      use_ssl: false
+    // Convert app_settings format to expected email settings format
+    const emailSettings: Record<string, unknown> = {}
+    data?.forEach(setting => {
+      emailSettings[setting.key] = setting.value
+    })
+
+    // Return with defaults if settings don't exist
+    return {
+      smtp_host: emailSettings.smtp_host || '',
+      smtp_port: emailSettings.smtp_port || 587,
+      smtp_username: emailSettings.smtp_username || '',
+      smtp_password: emailSettings.smtp_password || '',
+      from_email: emailSettings.from_email || '',
+      from_name: emailSettings.from_name || '',
+      reply_to_email: emailSettings.reply_to_email || '',
+      email_signature: emailSettings.email_signature || '',
+      use_tls: emailSettings.use_tls !== undefined ? emailSettings.use_tls : true,
+      use_ssl: emailSettings.use_ssl !== undefined ? emailSettings.use_ssl : false,
+      is_enabled: emailSettings.is_enabled !== undefined ? emailSettings.is_enabled : true,
+      subject_prefix: emailSettings.subject_prefix || ''
     }
   }),
 
   updateEmailSettings: adminProcedure
     .input(z.object({
-      smtp_server: z.string(),
-      smtp_port: z.number().int().min(1).max(65535),
-      smtp_username: z.string(),
-      smtp_password: z.string(),
-      from_email: z.string().email(),
-      from_name: z.string(),
-      use_tls: z.boolean(),
-      use_ssl: z.boolean(),
+      smtp_host: z.string().optional(),
+      smtp_port: z.number().int().min(1).max(65535).optional(),
+      smtp_username: z.string().optional(),
+      smtp_password: z.string().optional(),
+      from_email: z.string().email().optional(),
+      from_name: z.string().optional(),
+      reply_to_email: z.string().email().optional(),
+      email_signature: z.string().optional(),
+      use_tls: z.boolean().optional(),
+      use_ssl: z.boolean().optional(),
+      is_enabled: z.boolean().optional(),
+      subject_prefix: z.string().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
-      // Check if settings exist
-      const { data: existing } = await ctx.supabaseService
-        .from('email_settings')
-        .select('id')
-        .limit(1)
-        .single()
+      const results = []
+      
+      // Update each setting in app_settings table
+      for (const [key, value] of Object.entries(input)) {
+        if (value !== undefined) {
+          // Check if setting exists
+          const { data: existing } = await ctx.supabaseService
+            .from('app_settings')
+            .select('id')
+            .eq('category', 'email')
+            .eq('key', key)
+            .single()
 
-      if (existing) {
-        // Update existing
-        const { data, error } = await ctx.supabaseService
-          .from('email_settings')
-          .update({
-            ...input,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existing.id)
-          .select()
-          .single()
+          if (existing) {
+            // Update existing setting
+            const { error } = await ctx.supabaseService
+              .from('app_settings')
+              .update({
+                value: value,
+                updated_at: new Date().toISOString(),
+                updated_by: ctx.user?.email
+              })
+              .eq('id', existing.id)
 
-        if (error) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+            if (error) {
+              throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Failed to update ${key}: ${error.message}` })
+            }
+          } else {
+            // Create new setting
+            const { error } = await ctx.supabaseService
+              .from('app_settings')
+              .insert({
+                category: 'email',
+                key: key,
+                value: value,
+                description: getEmailSettingDescription(key),
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                created_by: ctx.user?.email,
+                updated_by: ctx.user?.email
+              })
+
+            if (error) {
+              throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Failed to create ${key}: ${error.message}` })
+            }
+          }
+          
+          results.push({ key, value, status: 'updated' })
         }
-        return data
-      } else {
-        // Create new
-        const { data, error } = await ctx.supabaseService
-          .from('email_settings')
-          .insert(input)
-          .select()
-          .single()
-
-        if (error) {
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
-        }
-        return data
       }
+
+      return { success: true, updated: results }
     }),
 
   // Unified Audit Logs (NEW - replaces system_logs, activity_logs, email_logs)
@@ -339,76 +388,25 @@ export const adminRouter = createTRPCRouter({
       return data || []
     }),
 
-  // System Logs
-  getSystemLogs: adminProcedure
-    .input(z.object({
-      limit: z.number().int().min(1).max(100).default(50),
-      offset: z.number().int().min(0).default(0),
-      level: z.enum(['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']).optional(),
-    }))
-    .query(async ({ input, ctx }) => {
-      let query = ctx.supabaseService
-        .from('system_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range(input.offset, input.offset + input.limit - 1)
+  // Legacy endpoints removed - use getUnifiedLogs instead
 
-      if (input.level) {
-        query = query.eq('level', input.level)
-      }
-
-      const { data, error } = await query
-
-      if (error) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
-      }
-
-      return data || []
-    }),
-
-  // Activity Logs
-  getActivityLogs: adminProcedure
-    .input(z.object({
-      limit: z.number().int().min(1).max(100).default(50),
-      offset: z.number().int().min(0).default(0),
-      user_id: z.string().uuid().optional(),
-    }))
-    .query(async ({ input, ctx }) => {
-      let query = ctx.supabaseService
-        .from('activity_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range(input.offset, input.offset + input.limit - 1)
-
-      if (input.user_id) {
-        query = query.eq('user_id', input.user_id)
-      }
-
-      const { data, error } = await query
-
-      if (error) {
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
-      }
-
-      return data || []
-    }),
-
-  // Email Logs
+  // Email Logs (Updated to use unified audit logs)
   getEmailLogs: adminProcedure
     .input(z.object({
       limit: z.number().int().min(1).max(100).default(50),
       offset: z.number().int().min(0).default(0),
-      status: z.enum(['pending', 'sent', 'failed']).optional(),
+      status: z.string().optional(),
     }))
     .query(async ({ input, ctx }) => {
       let query = ctx.supabaseService
-        .from('email_logs')
+        .from('unified_logs_with_user_info')
         .select('*')
+        .eq('log_type', 'email') // Only get email-related logs
         .order('created_at', { ascending: false })
         .range(input.offset, input.offset + input.limit - 1)
 
       if (input.status) {
-        query = query.eq('status', input.status)
+        query = query.eq('email_status', input.status)
       }
 
       const { data, error } = await query
@@ -417,7 +415,23 @@ export const adminRouter = createTRPCRouter({
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
       }
 
-      return data || []
+      // Transform the data to match the expected email logs format
+      const emailLogs = data?.map(log => ({
+        id: log.id,
+        recipient_email: log.email_to?.[0] || 'Unknown', // Take first recipient
+        subject: log.email_subject || log.message || 'No subject',
+        status: log.email_status || 'unknown',
+        sent_at: log.created_at,
+        created_at: log.created_at,
+        error_message: log.error_details?.message || null,
+        message_id: log.details?.message_id || null,
+        provider: log.details?.provider || 'system',
+        user_email: log.user_email,
+        username: log.username,
+        user_display_name: log.user_display_name
+      })) || []
+
+      return emailLogs
     }),
 
   // Test Email

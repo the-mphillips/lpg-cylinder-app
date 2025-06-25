@@ -686,7 +686,7 @@ function EmailSettingsTab() {
   const updateEmailSettings = api.admin.updateEmailSettings.useMutation()
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState({
-    smtp_server: '',
+    smtp_host: '',
     smtp_port: 587,
     smtp_username: '',
     smtp_password: '',
@@ -696,11 +696,26 @@ function EmailSettingsTab() {
     email_signature: '',
     use_tls: true,
     use_ssl: false,
+    is_enabled: true,
+    subject_prefix: '',
   })
 
   useEffect(() => {
     if (emailSettings) {
-      setFormData(emailSettings)
+      setFormData({
+        smtp_host: typeof emailSettings.smtp_host === 'string' ? emailSettings.smtp_host : '',
+        smtp_port: typeof emailSettings.smtp_port === 'number' ? emailSettings.smtp_port : 587,
+        smtp_username: typeof emailSettings.smtp_username === 'string' ? emailSettings.smtp_username : '',
+        smtp_password: typeof emailSettings.smtp_password === 'string' ? emailSettings.smtp_password : '',
+        from_email: typeof emailSettings.from_email === 'string' ? emailSettings.from_email : '',
+        from_name: typeof emailSettings.from_name === 'string' ? emailSettings.from_name : '',
+        reply_to_email: typeof emailSettings.reply_to_email === 'string' ? emailSettings.reply_to_email : '',
+        email_signature: typeof emailSettings.email_signature === 'string' ? emailSettings.email_signature : '',
+        use_tls: typeof emailSettings.use_tls === 'boolean' ? emailSettings.use_tls : true,
+        use_ssl: typeof emailSettings.use_ssl === 'boolean' ? emailSettings.use_ssl : false,
+        is_enabled: typeof emailSettings.is_enabled === 'boolean' ? emailSettings.is_enabled : true,
+        subject_prefix: typeof emailSettings.subject_prefix === 'string' ? emailSettings.subject_prefix : '',
+      })
     }
   }, [emailSettings])
 
@@ -717,7 +732,20 @@ function EmailSettingsTab() {
 
   const handleCancel = () => {
     if (emailSettings) {
-      setFormData(emailSettings)
+      setFormData({
+        smtp_host: typeof emailSettings.smtp_host === 'string' ? emailSettings.smtp_host : '',
+        smtp_port: typeof emailSettings.smtp_port === 'number' ? emailSettings.smtp_port : 587,
+        smtp_username: typeof emailSettings.smtp_username === 'string' ? emailSettings.smtp_username : '',
+        smtp_password: typeof emailSettings.smtp_password === 'string' ? emailSettings.smtp_password : '',
+        from_email: typeof emailSettings.from_email === 'string' ? emailSettings.from_email : '',
+        from_name: typeof emailSettings.from_name === 'string' ? emailSettings.from_name : '',
+        reply_to_email: typeof emailSettings.reply_to_email === 'string' ? emailSettings.reply_to_email : '',
+        email_signature: typeof emailSettings.email_signature === 'string' ? emailSettings.email_signature : '',
+        use_tls: typeof emailSettings.use_tls === 'boolean' ? emailSettings.use_tls : true,
+        use_ssl: typeof emailSettings.use_ssl === 'boolean' ? emailSettings.use_ssl : false,
+        is_enabled: typeof emailSettings.is_enabled === 'boolean' ? emailSettings.is_enabled : true,
+        subject_prefix: typeof emailSettings.subject_prefix === 'string' ? emailSettings.subject_prefix : '',
+      })
     }
     setIsEditing(false)
   }
@@ -762,13 +790,13 @@ function EmailSettingsTab() {
             <Label className="font-medium">SMTP Server</Label>
             {isEditing ? (
               <Input
-                value={formData.smtp_server}
-                onChange={(e) => setFormData(prev => ({ ...prev, smtp_server: e.target.value }))}
+                value={formData.smtp_host}
+                onChange={(e) => setFormData(prev => ({ ...prev, smtp_host: e.target.value }))}
                 placeholder="smtp.gmail.com"
               />
             ) : (
               <div className="p-3 bg-muted rounded-md border">
-                <span className="text-sm">{formData.smtp_server || 'Not configured'}</span>
+                <span className="text-sm">{formData.smtp_host || 'Not configured'}</span>
               </div>
             )}
           </div>
