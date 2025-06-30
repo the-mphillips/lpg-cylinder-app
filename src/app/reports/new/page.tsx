@@ -1,11 +1,14 @@
 "use client"
 
+import { useState, useEffect, useMemo } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { useForm, ControllerRenderProps } from "react-hook-form"
 import * as z from "zod"
 
 import { Button } from "@/components/ui/button"
 import {
+  Form,
   FormControl,
   FormField,
   FormItem,
@@ -13,9 +16,6 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { api } from "@/lib/trpc/client"
-import { useRouter } from "next/navigation"
 import {
   Select,
   SelectContent,
@@ -23,308 +23,879 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Calendar as CalendarIcon } from "lucide-react"
-import { Calendar } from "@/components/ui/calendar"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
-import { format } from "date-fns"
-import { CylinderDataForm } from "@/app/reports/components/cylinder-data-form"
-import { FormProvider } from "react-hook-form"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+// Simple toast replacement for now
+const useToast = () => ({
+  toast: ({ title, description, variant }: { title: string; description: string; variant?: string }) => {
+    console.log(`${variant === 'destructive' ? 'ERROR' : 'INFO'}: ${title} - ${description}`)
+  }
+})
+import { api } from "@/lib/trpc/client"
+import { Save, RotateCcw, Eye } from "lucide-react"
+import { CylinderDataForm } from "../components/cylinder-data-form"
 
-// This schema can be imported from the router, but defining it here
-// allows for client-side validation without pulling in server code.
+// Comprehensive validation schema matching the old system
 const reportSchema = z.object({
-  customer_name: z.string().min(1, 'Customer name is required'),
-  address: z.string().min(1, 'Address is required'),
-  suburb: z.string().min(1, 'Suburb is required'),
-  state: z.string().min(1, 'State is required'),
-  postcode: z.string().min(4, 'Postcode is required'),
-  cylinder_gas_type: z.string().min(1, 'Gas type is required'),
-  gas_supplier: z.string().optional(),
-  size: z.string().min(1, 'Cylinder size is required'),
-  test_date: z.string().min(1, 'Test date is required'), // Will be a date picker
-  tester_names: z.string().min(1, 'Tester name is required'),
-  vehicle_id: z.string().min(1, 'Vehicle ID is required'),
-  work_order: z.string().optional(),
-  major_customer_id: z.string().optional(),
-  // A placeholder for the complex cylinder data object
-  cylinder_data: z.record(z.any()).default({}), 
-});
+  customerType: z.string().min(1, "Required"),
+  majorCustomer: z.string().optional(),
+  customerName: z.string().min(1, "Required"),
+  address: z.string().min(1, "Required"),
+  suburb: z.string().min(1, "Required"),
+  state: z.string().min(1, "Required"),
+  postcode: z.string().min(4, "Required").regex(/^\d{4}$/, "Must be 4 digits"),
+  cylinder_gas_type: z.string().min(1, "Required"),
+  gasTypeOther: z.string().optional(),
+  size: z.string().min(1, "Required"),
+  sizeOther: z.string().optional(),
+  gas_supplier: z.string().min(1, "Required"),
+  supplierOther: z.string().optional(),
+  test_date: z.string().min(1, "Required"),
+  vehicleId: z.string().min(1, "Required"),
+  vehicleIdOther: z.string().optional(),
+  work_order: z.string().min(1, "Required"),
+  primaryTester: z.string().min(1, "Required"),
+  secondTester: z.string().optional(),
+  thirdTester: z.string().optional(),
+  cylinders: z.array(
+    z.object({
+      cylinderNo: z.string().min(1, "Required"),
+      cylinderSpec: z.string().min(1, "Required"),
+      wc: z.string().min(1, "Required"),
+      extExam: z.enum(["PASS", "FAIL"], { errorMap: () => ({ message: "Must be PASS or FAIL" }) }),
+      intExam: z.enum(["PASS", "FAIL"], { errorMap: () => ({ message: "Must be PASS or FAIL" }) }),
+      barcode: z.string().min(1, "Required"),
+      remarks: z.string().optional(),
+      recordedBy: z.string().optional(),
+    })
+  ).min(1, "At least one cylinder is required"),
+}).superRefine((data, ctx) => {
+  // Conditional validation for "Other" fields
+  if (data.customerType === 'major' && !data.majorCustomer) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Required for major customers",
+      path: ["majorCustomer"],
+    })
+  }
+  if (data.cylinder_gas_type === 'Other' && !data.gasTypeOther) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Please specify the gas type",
+      path: ["gasTypeOther"],
+    })
+  }
+  if (data.size === 'Other' && !data.sizeOther) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Please specify the size",
+      path: ["sizeOther"],
+    })
+  }
+  if (data.gas_supplier === 'Other' && !data.supplierOther) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Please specify the supplier",
+      path: ["supplierOther"],
+    })
+  }
+  if (data.vehicleId === 'Other' && !data.vehicleIdOther) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Please specify the vehicle ID",
+      path: ["vehicleIdOther"],
+    })
+  }
+})
+
+type ReportFormData = z.infer<typeof reportSchema>
+
+// Simple debounce function with cancel method
+const debounce = (func: (values: ReportFormData) => void, delay: number) => {
+  let timeoutId: NodeJS.Timeout
+  const debounced = (values: ReportFormData) => {
+    clearTimeout(timeoutId)
+    timeoutId = setTimeout(() => func(values), delay)
+  }
+  debounced.cancel = () => clearTimeout(timeoutId)
+  return debounced
+}
+
+const stateOptions = [
+  { label: 'Victoria', value: 'VIC' },
+  { label: 'New South Wales', value: 'NSW' },
+  { label: 'Queensland', value: 'QLD' },
+  { label: 'Western Australia', value: 'WA' },
+  { label: 'South Australia', value: 'SA' },
+  { label: 'Tasmania', value: 'TAS' },
+  { label: 'Australian Capital Territory', value: 'ACT' },
+  { label: 'Northern Territory', value: 'NT' },
+]
+
+const vehicleOptions = [
+  'BWA-01', 'BWA-02', 'BWA-03', 'BWA-04', 'BWA-05',
+  'BWA-06', 'BWA-07', 'BWA-08', 'BWA-TAS', 'Other'
+]
+
+const sizeOptions = ['4kg', '9kg', '15kg', '45kg', '90kg', '190kg', '210kg', 'Other']
+const supplierOptions = ['SUPAGAS', 'ELGAS', 'ORIGIN', 'Other']
 
 export default function NewReportPage() {
   const router = useRouter()
-  const createReport = api.reports.create.useMutation({
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+  const [previewData, setPreviewData] = useState<ReportFormData | null>(null)
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false)
+
+  // API queries
+  const { data: majorCustomers = [] } = api.reports.getMajorCustomers.useQuery()
+  const { data: testers = [] } = api.reports.getTesters.useQuery()
+  const { data: nextReportNumber = '' } = api.reports.getNextReportNumber.useQuery()
+
+  // Mutations
+  const createReportMutation = api.reports.create.useMutation({
     onSuccess: () => {
-      // TODO: Add success notification (toast)
-      router.push("/reports")
+      toast({
+        title: "Success",
+        description: "Report created successfully",
+      })
+      localStorage.removeItem('newReportFormData')
+      router.push('/dashboard')
     },
     onError: (error) => {
-      // TODO: Add error notification (toast)
-      console.error("Failed to create report", error)
+      toast({
+        title: "Error",
+        description: `Failed to create report: ${error.message}`,
+        variant: "destructive",
+      })
     },
   })
 
-  const form = useForm<z.infer<typeof reportSchema>>({
+  // Initialize form with default values
+  const form = useForm<ReportFormData>({
     resolver: zodResolver(reportSchema),
     defaultValues: {
-      customer_name: "",
-      address: "",
-      suburb: "",
-      state: "",
-      postcode: "",
-      cylinder_gas_type: "LPG",
-      gas_supplier: "",
-      size: "",
+      customerType: '',
+      majorCustomer: '',
+      customerName: '',
+      address: '',
+      suburb: '',
+      state: '',
+      postcode: '',
+      cylinder_gas_type: 'LPG',
+      gasTypeOther: '',
+      size: '',
+      sizeOther: '',
+      gas_supplier: '',
+      supplierOther: '',
       test_date: new Date().toISOString().split('T')[0],
-      tester_names: "",
-      vehicle_id: "",
-      work_order: "",
-      major_customer_id: "",
+      vehicleId: '',
+      vehicleIdOther: '',
+      work_order: '',
+      primaryTester: '',
+      secondTester: '',
+      thirdTester: '',
+      cylinders: [{
+        cylinderNo: '',
+        cylinderSpec: '',
+        wc: '',
+        extExam: 'PASS',
+        intExam: 'PASS',
+        barcode: '',
+        remarks: '',
+        recordedBy: '',
+      }],
     },
   })
 
-  function onSubmit(values: z.infer<typeof reportSchema>) {
-    createReport.mutate(values)
+  // Auto-save functionality
+  const debouncedSave = useMemo(
+    () => debounce((values: ReportFormData) => {
+      try {
+        localStorage.setItem('newReportFormData', JSON.stringify(values))
+        toast({
+          title: "Auto-saved",
+          description: "Form data has been saved locally",
+          variant: "default",
+        })
+      } catch (error) {
+        console.error('Error auto-saving form data:', error)
+      }
+    }, 2000),
+    [toast]
+  )
+
+  // Load saved data or duplicate report on mount (only once)
+  useEffect(() => {
+    const loadInitialData = async () => {
+      const duplicateId = searchParams.get('duplicate')
+      
+      if (duplicateId) {
+        try {
+          // TODO: Implement duplicate functionality when getById is available
+          toast({
+            title: "Info",
+            description: "Duplicate functionality will be available soon",
+          })
+        } catch (error) {
+          console.error('Error loading duplicate report:', error)
+        }
+      } else {
+        // Load from localStorage
+        const savedData = localStorage.getItem('newReportFormData')
+        if (savedData) {
+          try {
+            const parsedData = JSON.parse(savedData)
+            form.reset(parsedData)
+            toast({
+              title: "Restored",
+              description: "Previous form data has been restored",
+            })
+          } catch (error) {
+            console.error('Error parsing saved form data:', error)
+            localStorage.removeItem('newReportFormData')
+          }
+        }
+      }
+      setIsInitialLoadComplete(true)
+    }
+
+    loadInitialData()
+  }, []) // Only run once on mount
+
+  // Watch form values for auto-save (only after initial load is complete)
+  const watchedValues = form.watch()
+  useEffect(() => {
+    if (isInitialLoadComplete) {
+      debouncedSave(watchedValues)
+    }
+    return () => debouncedSave.cancel()
+  }, [watchedValues, debouncedSave, isInitialLoadComplete])
+
+  const onSubmit = async (values: ReportFormData) => {
+    try {
+      // Transform form data to match API requirements
+      const reportData = {
+        customer: values.customerType === 'major' 
+          ? values.customerName 
+            ? `${values.majorCustomer} - ${values.customerName}`
+            : values.majorCustomer || ''
+          : values.customerName || '',
+        address: {
+          street: values.address,
+          suburb: values.suburb,
+          state: values.state,
+          postcode: values.postcode,
+        },
+        gas_type: values.cylinder_gas_type === 'Other' ? values.gasTypeOther! : values.cylinder_gas_type,
+        gas_supplier: values.gas_supplier === 'Other' ? values.supplierOther! : values.gas_supplier,
+        size: values.size === 'Other' ? values.sizeOther! : values.size,
+        test_date: values.test_date,
+        tester_names: [values.primaryTester, values.secondTester, values.thirdTester]
+          .filter(name => name && name !== 'none'),
+        vehicle_id: values.vehicleId === 'Other' ? values.vehicleIdOther! : values.vehicleId,
+        work_order: values.work_order,
+        major_customer_id: values.customerType === 'major' ? values.majorCustomer : undefined,
+        cylinder_data: values.cylinders,
+      }
+
+      await createReportMutation.mutateAsync(reportData)
+    } catch (error) {
+      console.error('Error submitting form:', error)
+    }
   }
 
-  return (
-    <div className="container mx-auto py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Create New Report</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <FormProvider {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              
-              {/* Customer Details Section */}
-              <Card>
-                <CardHeader><CardTitle>Customer Details</CardTitle></CardHeader>
-                <CardContent className="grid md:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="customer_name"
-                    render={({ field }: { field: ControllerRenderProps<z.infer<typeof reportSchema>, "customer_name"> }) => (
-                      <FormItem>
-                        <FormLabel>Customer Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter customer name" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="address"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Address</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter address" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="suburb"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Suburb</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter suburb" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="state"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>State</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a state" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="VIC">Victoria</SelectItem>
-                            <SelectItem value="NSW">New South Wales</SelectItem>
-                            <SelectItem value="QLD">Queensland</SelectItem>
-                            <SelectItem value="WA">Western Australia</SelectItem>
-                            <SelectItem value="SA">South Australia</SelectItem>
-                            <SelectItem value="TAS">Tasmania</SelectItem>
-                             <SelectItem value="ACT">Australian Capital Territory</SelectItem>
-                             <SelectItem value="NT">Northern Territory</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="postcode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Postcode</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter 4-digit postcode" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </CardContent>
-              </Card>
+  const handleReset = () => {
+    form.reset()
+    localStorage.removeItem('newReportFormData')
+    setIsInitialLoadComplete(false)
+    // Reset initial load flag after a brief delay to allow form reset to complete
+    setTimeout(() => setIsInitialLoadComplete(true), 100)
+    toast({
+      title: "Reset",
+      description: "Form has been reset",
+    })
+  }
 
-              {/* Report Details Section */}
-               <Card>
-                <CardHeader><CardTitle>Report Details</CardTitle></CardHeader>
-                <CardContent className="grid md:grid-cols-2 gap-4">
-                   <FormField
-                    control={form.control}
-                    name="test_date"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Test Date</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full pl-3 text-left font-normal",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                              >
-                                {field.value ? (
-                                  format(new Date(field.value), "PPP")
-                                ) : (
-                                  <span>Pick a date</span>
-                                )}
-                                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={new Date(field.value)}
-                              onSelect={(date) => field.onChange(date?.toISOString().split('T')[0])}
-                              initialFocus
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="work_order"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Work Order</FormLabel>
+  // Clear localStorage on first load to prevent any corrupted data issues
+  useEffect(() => {
+    // Remove any corrupted form data that might cause infinite loops
+    localStorage.removeItem('newReportFormData')
+  }, [])
+
+  const customerTypeValue = form.watch('customerType')
+  const gasTypeValue = form.watch('cylinder_gas_type')
+  const sizeValue = form.watch('size')
+  const supplierValue = form.watch('gas_supplier')
+  const vehicleIdValue = form.watch('vehicleId')
+  const primaryTesterValue = form.watch('primaryTester')
+  const secondTesterValue = form.watch('secondTester')
+
+  return (
+    <div className="container mx-auto p-4 max-w-6xl">
+      <h1 className="text-2xl font-bold mb-6">New Report</h1>
+
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          {/* Customer Information */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Customer Details</CardTitle>
+              <div className="text-red-600 font-semibold">
+                Temporary Test Report Number: {nextReportNumber}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Customer Type */}
+              <FormField
+                control={form.control}
+                name="customerType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Customer Type</FormLabel>
+                    <Select onValueChange={(value) => {
+                      field.onChange(value)
+                      form.setValue('majorCustomer', '')
+                      form.setValue('customerName', '')
+                    }} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select customer type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="major">Major Customer</SelectItem>
+                        <SelectItem value="other">Other/New</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Major Customer - only show if customer type is major */}
+              {customerTypeValue === 'major' && (
+                <FormField
+                  control={form.control}
+                  name="majorCustomer"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Major Customer</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
-                          <Input placeholder="Enter work order #" {...field} />
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select major customer" />
+                          </SelectTrigger>
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="vehicle_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Vehicle ID</FormLabel>
+                        <SelectContent>
+                          {majorCustomers.map((customer) => (
+                            <SelectItem key={customer.id} value={customer.name}>
+                              {customer.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              <FormField
+                control={form.control}
+                name="customerName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      {customerTypeValue === 'major' ? 'Additional Customer Info' : 'Customer Name'}
+                    </FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder={
+                          customerTypeValue === 'major' 
+                            ? "Additional customer details (optional)" 
+                            : "Enter customer name"
+                        }
+                        disabled={customerTypeValue === ''}
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Enter address" 
+                        autoComplete="address-line1"
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField
+                  control={form.control}
+                  name="suburb"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Suburb</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Enter suburb" 
+                          autoComplete="address-level2"
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="state"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>State</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
-                          <Input placeholder="Enter vehicle ID" {...field} />
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select state" />
+                          </SelectTrigger>
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="tester_names"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tester Name(s)</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter tester names, separated by commas" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                        <SelectContent>
+                          {stateOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="postcode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Postcode</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter 4-digit postcode" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Gas Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Gas Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Gas Type */}
+                <div className="space-y-4">
                   <FormField
                     control={form.control}
                     name="cylinder_gas_type"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Gas Type</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., LPG" {...field} />
-                        </FormControl>
+                        <Select onValueChange={(value) => {
+                          field.onChange(value)
+                          if (value !== 'Other') form.setValue('gasTypeOther', '')
+                        }} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select gas type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="LPG">LPG</SelectItem>
+                            <SelectItem value="Other">Other</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                  {gasTypeValue === 'Other' && (
+                    <FormField
+                      control={form.control}
+                      name="gasTypeOther"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Specify Gas Type</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Specify gas type" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+
+                {/* Size */}
+                <div className="space-y-4">
                   <FormField
                     control={form.control}
                     name="size"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Cylinder Size</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., 9kg" {...field} />
-                        </FormControl>
+                        <FormLabel>Size</FormLabel>
+                        <Select onValueChange={(value) => {
+                          field.onChange(value)
+                          if (value !== 'Other') form.setValue('sizeOther', '')
+                        }} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select size" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {sizeOptions.map((size) => (
+                              <SelectItem key={size} value={size}>
+                                {size}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                   <FormField
+                  {sizeValue === 'Other' && (
+                    <FormField
+                      control={form.control}
+                      name="sizeOther"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Specify Size</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Specify size" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+
+                {/* Supplier */}
+                <div className="space-y-4">
+                  <FormField
                     control={form.control}
                     name="gas_supplier"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Gas Supplier</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter gas supplier" {...field} />
-                        </FormControl>
+                        <FormLabel>Supplier</FormLabel>
+                        <Select onValueChange={(value) => {
+                          field.onChange(value)
+                          if (value !== 'Other') form.setValue('supplierOther', '')
+                        }} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select supplier" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {supplierOptions.map((supplier) => (
+                              <SelectItem key={supplier} value={supplier}>
+                                {supplier}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </CardContent>
-              </Card>
+                  {supplierValue === 'Other' && (
+                    <FormField
+                      control={form.control}
+                      name="supplierOther"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Specify Supplier</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Specify supplier" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-              {/* Cylinder Data Section */}
-               <Card>
-                <CardHeader><CardTitle>Cylinder Data</CardTitle></CardHeader>
-                <CardContent>
-                  <CylinderDataForm />
-                </CardContent>
-              </Card>
+          {/* Report Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Report Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <FormField
+                  control={form.control}
+                  name="test_date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <Button type="submit" disabled={createReport.status === 'pending'}>
-                {createReport.status === 'pending' ? "Saving..." : "Save Report"}
-              </Button>
-            </form>
-          </FormProvider>
-        </CardContent>
-      </Card>
+                {/* Vehicle ID */}
+                <div className="space-y-4">
+                  <FormField
+                    control={form.control}
+                    name="vehicleId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Vehicle ID</FormLabel>
+                        <Select onValueChange={(value) => {
+                          field.onChange(value)
+                          if (value !== 'Other') form.setValue('vehicleIdOther', '')
+                        }} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select vehicle ID" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {vehicleOptions.map((id) => (
+                              <SelectItem key={id} value={id}>
+                                {id}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {vehicleIdValue === 'Other' && (
+                    <FormField
+                      control={form.control}
+                      name="vehicleIdOther"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Specify Vehicle ID</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Specify vehicle ID" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="work_order"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Work Order</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter work order" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Testers */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <FormField
+                  control={form.control}
+                  name="primaryTester"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Primary Tester</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select primary tester" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {testers.map((tester) => (
+                            <SelectItem key={tester.id} value={tester.name}>
+                              {tester.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="secondTester"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Second Tester</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={!primaryTesterValue}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select second tester" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {testers
+                            .filter(tester => tester.name !== primaryTesterValue)
+                            .map((tester) => (
+                            <SelectItem key={tester.id} value={tester.name}>
+                              {tester.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="thirdTester"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Third Tester</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={!secondTesterValue}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select third tester" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {testers
+                            .filter(tester => 
+                              tester.name !== primaryTesterValue && 
+                              tester.name !== secondTesterValue
+                            )
+                            .map((tester) => (
+                            <SelectItem key={tester.id} value={tester.name}>
+                              {tester.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Cylinder Data */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Cylinder Data</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CylinderDataForm />
+            </CardContent>
+          </Card>
+
+          {/* Action Buttons */}
+          <div className="flex justify-between space-x-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleReset}
+              className="gap-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset Form
+            </Button>
+            
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setPreviewData(form.getValues())
+                setIsPreviewOpen(true)
+              }}
+              className="gap-2"
+            >
+              <Eye className="h-4 w-4" />
+              Preview
+            </Button>
+            
+            <Button
+              type="submit"
+              disabled={createReportMutation.status === 'pending'}
+              className="gap-2"
+            >
+              <Save className="h-4 w-4" />
+              {createReportMutation.status === 'pending' ? 'Saving...' : 'Save Report'}
+            </Button>
+          </div>
+
+          {/* Preview Modal */}
+          <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Report Preview</DialogTitle>
+                <DialogDescription>
+                  Preview of the report data before saving
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <pre className="text-sm bg-muted p-4 rounded-lg overflow-auto">
+                  {previewData ? JSON.stringify(previewData, null, 2) : 'No data to preview'}
+                </pre>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => setIsPreviewOpen(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </form>
+      </Form>
     </div>
   )
 } 
