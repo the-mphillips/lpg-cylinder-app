@@ -5,18 +5,15 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
-  Activity,
   Bell,
   ClipboardList,
   Eye,
   FolderOpen,
-  HourglassIcon,
   RefreshCw,
   CheckCircle,
   Users,
   ArrowUpDown,
   Settings,
-  User,
   FileText,
   FileEdit,
   Clock,
@@ -46,7 +43,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Progress } from "@/components/ui/progress"
 import { Switch } from "@/components/ui/switch"
 import {
   Table,
@@ -66,6 +62,29 @@ import {
   CartesianGrid,
 } from "recharts"
 import { api } from "@/lib/trpc/client"
+
+// Date formatting function for notifications
+const formatNotificationTime = (timestamp: string) => {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+  
+  // Show relative time for recent notifications
+  if (diffInMinutes < 1) return 'Just now'
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`
+  if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`
+  
+  // Show formatted date for older notifications
+  const options: Intl.DateTimeFormatOptions = {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  }
+  
+  return date.toLocaleDateString('en-US', options)
+}
 
 interface SortConfig {
   key: string
@@ -365,34 +384,34 @@ export default function Dashboard() {
         {/* User Stats and Notifications - 2 Column Layout */}
         <div className="grid gap-4 md:grid-cols-2 md:gap-8">
           {/* User Statistics */}
-          <Card className="bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
+          <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-indigo-100 rounded-lg">
                   <Users className="h-5 w-5 text-indigo-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-indigo-900">User Statistics</CardTitle>
-                  <CardDescription className="text-indigo-700">System user metrics</CardDescription>
+                  <CardTitle>User Statistics</CardTitle>
+                  <CardDescription>System user metrics</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {userStatistics ? (
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-3 bg-white rounded-lg border">
+                  <div className="text-center p-3 rounded-lg border">
                     <div className="text-2xl font-bold text-indigo-600">{userStatistics.total}</div>
                     <div className="text-sm text-muted-foreground">Total Users</div>
                   </div>
-                  <div className="text-center p-3 bg-white rounded-lg border">
+                  <div className="text-center p-3 rounded-lg border">
                     <div className="text-2xl font-bold text-purple-600">{userStatistics.admins}</div>
                     <div className="text-sm text-muted-foreground">Signatories</div>
                   </div>
-                  <div className="text-center p-3 bg-white rounded-lg border">
+                  <div className="text-center p-3 rounded-lg border">
                     <div className="text-2xl font-bold text-blue-600">{userStatistics.regularUsers}</div>
                     <div className="text-sm text-muted-foreground">Testers</div>
                   </div>
-                  <div className="text-center p-3 bg-white rounded-lg border">
+                  <div className="text-center p-3 rounded-lg border">
                     <div className="text-2xl font-bold text-green-600">{userStatistics.active}</div>
                     <div className="text-sm text-muted-foreground">Active</div>
                   </div>
@@ -426,15 +445,15 @@ export default function Dashboard() {
           </Card>
 
           {/* Notifications */}
-          <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200">
+          <Card>
             <CardHeader>
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-emerald-100 rounded-lg">
                   <Bell className="h-5 w-5 text-emerald-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-emerald-900">Notifications</CardTitle>
-                  <CardDescription className="text-emerald-700">Recent system updates</CardDescription>
+                  <CardTitle>Notifications</CardTitle>
+                  <CardDescription>Recent system updates</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -442,15 +461,15 @@ export default function Dashboard() {
               {notifications && notifications.length > 0 ? (
                 <div className="space-y-3 max-h-48 overflow-y-auto">
                   {notifications.slice(0, 5).map((notification: NotificationData, index: number) => (
-                    <div key={index} className="bg-white rounded-lg p-3 border-l-4 border-emerald-400 shadow-sm">
+                    <div key={index} className="rounded-lg p-3 border-l-4 border-emerald-400 shadow-sm">
                       <p className="text-sm font-medium text-gray-900">{notification.message}</p>
-                      <p className="text-xs text-emerald-600 mt-1">{notification.timestamp}</p>
+                      <p className="text-xs text-emerald-600 mt-1">{formatNotificationTime(notification.timestamp)}</p>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <div className="p-3 bg-white rounded-lg inline-block">
+                  <div className="p-3 rounded-lg inline-block">
                     <CheckCircle className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
                     <p className="text-sm text-muted-foreground">All caught up!</p>
                   </div>

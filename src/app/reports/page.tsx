@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { 
   Plus, 
   Search, 
@@ -102,6 +102,7 @@ interface Report {
 
 export default function ReportsPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { data: reports = [], isLoading, refetch } = api.reports.list.useQuery()
   
   const [filter, setFilter] = useState<FilterState>({
@@ -109,6 +110,14 @@ export default function ReportsPage() {
     search: '',
     dateRange: 'all'
   })
+
+  // Handle URL parameters on mount
+  useEffect(() => {
+    const filterParam = searchParams.get('filter')
+    if (filterParam && filterParam !== 'all') {
+      setFilter(prev => ({ ...prev, status: filterParam }))
+    }
+  }, [searchParams])
   
   const [pagination, setPagination] = useState<PaginationState>({
     currentPage: 1,
@@ -124,7 +133,8 @@ export default function ReportsPage() {
     
     return reports.filter((report: Report) => {
       const matchesStatus = filter.status === 'all' || 
-        report.status.toLowerCase() === filter.status.toLowerCase()
+        report.status.toLowerCase() === filter.status.toLowerCase() ||
+        (filter.status === 'submitted' && (report.status.toLowerCase() === 'submitted' || report.status.toLowerCase() === 'pending'))
       
       const matchesSearch = filter.search === '' || 
         report.report_number?.toString().toLowerCase().includes(filter.search.toLowerCase()) ||
@@ -285,15 +295,17 @@ export default function ReportsPage() {
     )
   }
 
-  // Stats cards
+  // Stats cards - calculate from all reports, not filtered
   const stats = useMemo(() => {
-    const total = filteredReports.length
-    const approved = filteredReports.filter(r => r.status.toLowerCase() === 'approved').length
-    const pending = filteredReports.filter(r => r.status.toLowerCase() === 'submitted').length
-    const draft = filteredReports.filter(r => r.status.toLowerCase() === 'draft').length
+    if (!Array.isArray(reports)) return { total: 0, approved: 0, pending: 0, draft: 0 }
+    
+    const total = reports.length
+    const approved = reports.filter(r => r.status.toLowerCase() === 'approved').length
+    const pending = reports.filter(r => r.status.toLowerCase() === 'submitted' || r.status.toLowerCase() === 'pending').length
+    const draft = reports.filter(r => r.status.toLowerCase() === 'draft').length
     
     return { total, approved, pending, draft }
-  }, [filteredReports])
+  }, [reports])
 
   if (isLoading) {
     return (
@@ -337,7 +349,7 @@ export default function ReportsPage() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className="cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-105" onClick={() => handleFilterChange({ status: 'all' })}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
@@ -346,7 +358,7 @@ export default function ReportsPage() {
             <div className="text-2xl font-bold">{stats.total}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-105" onClick={() => handleFilterChange({ status: 'approved' })}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Approved</CardTitle>
             <div className="h-4 w-4 rounded-full bg-green-500" />
@@ -355,7 +367,7 @@ export default function ReportsPage() {
             <div className="text-2xl font-bold">{stats.approved}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-105" onClick={() => handleFilterChange({ status: 'submitted' })}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending</CardTitle>
             <div className="h-4 w-4 rounded-full bg-yellow-500" />
@@ -364,7 +376,7 @@ export default function ReportsPage() {
             <div className="text-2xl font-bold">{stats.pending}</div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-105" onClick={() => handleFilterChange({ status: 'draft' })}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Draft</CardTitle>
             <div className="h-4 w-4 rounded-full bg-gray-500" />
