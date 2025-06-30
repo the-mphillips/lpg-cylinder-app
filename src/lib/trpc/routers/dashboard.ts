@@ -20,42 +20,39 @@ export const dashboardRouter = createTRPCRouter({
         });
       }
 
-      // Get detailed report information
-      const { data: reports, error: reportsError } = await ctx.supabaseService
-        .from('reports')
-        .select(`
-          id, 
-          status, 
-          created_at, 
-          updated_at,
-          report_number,
-          customer,
-          address,
-          gas_type,
-          test_date,
-          tester_names,
-          approved_signatory,
-          vehicle_id,
-          work_order,
-          user_id,
-          major_customer_id
-        `)
-        .order('created_at', { ascending: false });
+      // Use optimized dashboard stats view instead of processing all reports
+      const { data: statsData, error: statsError } = await ctx.supabaseService
+        .from('dashboard_stats_view')
+        .select('*')
+        .single();
+
+      if (statsError) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch dashboard statistics.',
+          cause: statsError,
+        });
+      }
+
+      // Use optimized recent reports view
+      const { data: recentReports, error: reportsError } = await ctx.supabaseService
+        .from('recent_reports_view')
+        .select('*');
 
       if (reportsError) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to fetch reports for stats.',
+          message: 'Failed to fetch recent reports.',
           cause: reportsError,
         });
       }
-      
+
       const reportStatistics = {
-        total: reports.length,
-        pending: reports.filter((r) => r.status === 'submitted').length,
-        approved: reports.filter((r) => r.status === 'approved').length,
-        draft: reports.filter((r) => r.status === 'draft').length,
-        rejected: reports.filter((r) => r.status === 'rejected').length,
+        total: statsData.total_reports || 0,
+        pending: statsData.pending_reports || 0,
+        approved: statsData.approved_reports || 0,
+        draft: statsData.draft_reports || 0,
+        rejected: statsData.rejected_reports || 0,
       };
 
       // Get user statistics for admin users
@@ -75,48 +72,62 @@ export const dashboardRouter = createTRPCRouter({
         }
       }
 
-      // Get recent reports with more details (last 10)
-      const recentReports = reports.slice(0, 10).map(report => ({
+      // Format recent reports
+      const formattedRecentReports = (recentReports || []).map(report => ({
         ...report,
         formatted_date: new Date(report.created_at).toLocaleDateString(),
-        status_display: report.status === 'submitted' ? 'Pending' : 
+        status_display: report.status === 'pending' ? 'Pending' : 
                        report.status === 'approved' ? 'Approved' : 
                        report.status === 'rejected' ? 'Rejected' : 'Draft'
       }));
 
-      // Enhanced trend data (count per day for the last 30 days)
-      const trend = Array.from({ length: 30 }).map((_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dateString = date.toISOString().split('T')[0];
-        
-        const count = reports.filter(
-          (r) => r.created_at.startsWith(dateString)
-        ).length;
+      // Enhanced trend data using monthly trends view
+      const { data: monthlyTrends, error: trendsError } = await ctx.supabaseService
+        .from('monthly_report_trends')
+        .select('*')
+        .limit(12);
 
-        return { 
-          date: dateString, 
-          count,
-          formatted_date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        };
-      }).reverse();
+      let reportTrend: Array<{
+        date: string;
+        count: number;
+        approved: number;
+        formatted_date: string;
+      }> = [];
+      if (!trendsError && monthlyTrends) {
+        reportTrend = monthlyTrends.map(trend => ({
+          date: trend.month,
+          count: trend.report_count,
+          approved: trend.approved_count,
+          formatted_date: new Date(trend.month).toLocaleDateString('en-US', { 
+            month: 'short', 
+            year: 'numeric' 
+          })
+        })).reverse(); // Show oldest to newest for chart
+      }
 
       // Get notifications (recent activity and system alerts)
       const notifications = [];
       
-      // Recent submissions (last 24 hours)
-      const oneDayAgo = new Date();
-      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-      const recentSubmissions = reports.filter(r => 
-        new Date(r.created_at) > oneDayAgo && r.status === 'submitted'
-      );
-      
-      if (recentSubmissions.length > 0) {
-        notifications.push({
-          type: 'info',
-          message: `${recentSubmissions.length} new report${recentSubmissions.length > 1 ? 's' : ''} submitted in the last 24 hours`,
-          timestamp: new Date().toISOString()
-        });
+      // Recent submissions check (last 24 hours) - only for pending reports
+      if (reportStatistics.pending > 0) {
+        // Get actual recent submissions count
+        const oneDayAgo = new Date();
+        oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+        
+        const { data: recentSubmissions } = await ctx.supabaseService
+          .from('reports')
+          .select('id')
+          .eq('status', 'pending')
+          .gte('created_at', oneDayAgo.toISOString());
+        
+        const recentCount = recentSubmissions?.length || 0;
+        if (recentCount > 0) {
+          notifications.push({
+            type: 'info',
+            message: `${recentCount} new report${recentCount > 1 ? 's' : ''} submitted in the last 24 hours`,
+            timestamp: new Date().toISOString()
+          });
+        }
       }
 
       // Pending approvals for signatories
@@ -139,8 +150,8 @@ export const dashboardRouter = createTRPCRouter({
         },
         reportStatistics,
         userStatistics,
-        recentReports,
-        reportTrend: trend,
+        recentReports: formattedRecentReports,
+        reportTrend,
         notifications,
         completionRate: reportStatistics.total > 0 
           ? Math.round((reportStatistics.approved / reportStatistics.total) * 100) 
@@ -158,7 +169,7 @@ export const dashboardRouter = createTRPCRouter({
 
   getReportDetails: authedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ ctx, input }) => {
+    .mutation(async ({ ctx, input }) => {
       try {
         const { data: report, error } = await ctx.supabaseService
           .from('reports')
@@ -190,7 +201,7 @@ export const dashboardRouter = createTRPCRouter({
         return {
           ...report,
           formatted_date: new Date(report.created_at).toLocaleDateString(),
-          status_display: report.status === 'submitted' ? 'Pending' : 
+          status_display: report.status === 'pending' ? 'Pending' : 
                          report.status === 'approved' ? 'Approved' : 
                          report.status === 'rejected' ? 'Rejected' : 'Draft'
         };

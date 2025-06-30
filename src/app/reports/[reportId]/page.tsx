@@ -13,22 +13,9 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-// Simple toast replacement for now
-const useToast = () => ({
-  toast: ({ title, description, variant }: { title: string; description: string; variant?: string }) => {
-    console.log(`${variant === 'destructive' ? 'Error' : 'Success'}: ${title} - ${description}`)
-  }
-})
-import { 
-  Eye, 
-  Edit, 
-  Check, 
-  Download, 
-  Mail, 
-  Trash2, 
-  ArrowLeft,
-  ExternalLink
-} from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { MoreVertical, Edit, Check, Download, Trash2, ArrowLeft, Archive, X } from 'lucide-react'
+import { toast } from "sonner"
 
 interface CylinderData {
   cylinderNo: string
@@ -41,178 +28,160 @@ interface CylinderData {
   recordedBy: string
 }
 
-// interface Report {
-//   id: string
-//   report_number: string
-//   customer_name: string
-//   address: string
-//   suburb: string
-//   state: string
-//   postcode: string
-//   cylinder_gas_type: string
-//   size: string
-//   gas_supplier: string
-//   test_date: string
-//   tester_names: string
-//   vehicle_id: string
-//   work_order: string
-//   status: string
-//   approved_signatory?: string
-//   approved_signatory_signature?: string
-//   major_customer_id?: string
-//   cylinder_data: CylinderData[]
-//   created_at: string
-//   updated_at: string
-// }
-
-// interface Signatory {
-//   id: string
-//   name: string
-//   signature_path?: string
-// }
-
-
-
 export default function ViewReportPage() {
   const params = useParams()
   const router = useRouter()
   const reportId = params.reportId as string
-  const { toast } = useToast()
 
   // State for modals
-  const [showPdfPreview, setShowPdfPreview] = useState(false)
-  const [approveModalOpen, setApproveModalOpen] = useState(false)
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
-  const [emailModalOpen, setEmailModalOpen] = useState(false)
-  const [emailConfirmOpen, setEmailConfirmOpen] = useState(false)
-
+  const [showApprovalModal, setShowApprovalModal] = useState(false)
+  const [showUnapprovalModal, setShowUnapprovalModal] = useState(false)
+  const [showArchiveModal, setShowArchiveModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  
   // Form state
   const [selectedSignatory, setSelectedSignatory] = useState('')
-  const [deletePassword, setDeletePassword] = useState('')
-  const [customerEmail, setCustomerEmail] = useState('')
-  const [emailBody, setEmailBody] = useState('')
+  const [adminPassword, setAdminPassword] = useState('')
+  const [archiveReason, setArchiveReason] = useState('')
 
   // API queries
-  const { data: report, isLoading, error, refetch } = api.reports.getById.useQuery({ id: reportId })
+  const { data: report, isLoading, error } = api.reports.getById.useQuery({ id: reportId })
   const { data: currentUser } = api.auth.getCurrentUser.useQuery()
   const { data: signatories = [] } = api.admin.getSignatories.useQuery()
+  const utils = api.useUtils()
 
   // Mutations
-  const approveReportMutation = api.reports.approve.useMutation({
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Report approved successfully",
+  const approveMutation = api.reports.approve.useMutation({
+    onSuccess: async () => {
+      toast.success("Report approved successfully", {
+        description: "The report has been approved and is ready for use."
       })
-      setApproveModalOpen(false)
+      setShowApprovalModal(false)
       setSelectedSignatory('')
-      refetch()
+      
+      // Invalidate both individual report and list queries
+      await utils.reports.getById.invalidate({ id: reportId })
+      await utils.reports.list.invalidate()
+      await utils.dashboard.getDashboardStats.invalidate()
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Failed to approve report: ${error.message}`,
-        variant: "destructive",
+      toast.error("Failed to approve report", {
+        description: error.message
+      })
+    },
+  })
+
+  const unapproveMutation = api.reports.unapprove.useMutation({
+    onSuccess: async () => {
+      toast.success("Report unapproved successfully", {
+        description: "The report status has been reverted to pending."
+      })
+      setShowUnapprovalModal(false)
+      setAdminPassword('')
+      
+      // Invalidate both individual report and list queries
+      await utils.reports.getById.invalidate({ id: reportId })
+      await utils.reports.list.invalidate()
+      await utils.dashboard.getDashboardStats.invalidate()
+    },
+    onError: (error) => {
+      toast.error("Failed to unapprove report", {
+        description: error.message
       })
     },
   })
 
   const deleteReportMutation = api.reports.delete.useMutation({
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Report deleted successfully",
+      toast.success("Report deleted successfully", {
+        description: "The report has been permanently deleted."
       })
       router.push('/reports')
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Failed to delete report: ${error.message}`,
-        variant: "destructive",
+      toast.error("Failed to delete report", {
+        description: error.message
       })
     },
   })
 
-  const sendEmailMutation = api.reports.sendEmail.useMutation({
+  const archiveMutation = api.reports.archiveReport.useMutation({
     onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Report sent successfully",
+      toast.success("Report archived successfully", {
+        description: "The report has been moved to the archive."
       })
-      setEmailModalOpen(false)
-      setEmailConfirmOpen(false)
-      setCustomerEmail('')
-      setEmailBody('')
+      setShowArchiveModal(false)
+      setArchiveReason('')
+      router.push("/reports")
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: `Failed to send report: ${error.message}`,
-        variant: "destructive",
+      toast.error("Failed to archive report", {
+        description: error.message
       })
     },
   })
 
   const handleApprove = () => {
-    if (!selectedSignatory) {
-      toast({
-        title: "Error",
-        description: "Please select a signatory",
-        variant: "destructive",
+    if (!selectedSignatory.trim()) {
+      toast.error("Signatory required", {
+        description: "Please select a signatory to approve this report."
       })
       return
     }
-    approveReportMutation.mutate({ 
-      reportId, 
-      signatoryName: selectedSignatory 
+
+    approveMutation.mutate({
+      reportId,
+      signatoryName: selectedSignatory,
+    })
+  }
+
+  const handleUnapprove = () => {
+    if (!adminPassword.trim()) {
+      toast.error("Password required", {
+        description: "Please enter the admin password to unapprove this report."
+      })
+      return
+    }
+
+    unapproveMutation.mutate({
+      reportId,
+      password: adminPassword,
     })
   }
 
   const handleDelete = () => {
-    if (!deletePassword) {
-      toast({
-        title: "Error",
-        description: "Please enter your password",
-        variant: "destructive",
+    if (!adminPassword.trim()) {
+      toast.error("Password required", {
+        description: "Please enter the admin password to delete this report."
       })
       return
     }
-    deleteReportMutation.mutate({ 
-      reportId, 
-      password: deletePassword 
-    })
-  }
 
-  const handleSendEmail = () => {
-    if (!customerEmail || !emailBody) {
-      toast({
-        title: "Error",
-        description: "Please fill in all email fields",
-        variant: "destructive",
-      })
-      return
-    }
-    sendEmailMutation.mutate({
+    deleteReportMutation.mutate({
       reportId,
-      customerEmail,
-      emailBody,
+      password: adminPassword,
     })
   }
 
-  const openEmailModal = () => {
-    setEmailModalOpen(true)
-    setEmailBody(`Dear ${report?.customer_name},
+  const handleArchive = () => {
+    if (!archiveReason.trim()) {
+      toast.error("Reason required", {
+        description: "Please provide a reason for archiving this report."
+      })
+      return
+    }
 
-I&apos;m pleased to inform you that we have received your payment for the Cylinder Retest, and the Test Certificate has been issued for ongoing compliance.
+    archiveMutation.mutate({
+      id: reportId,
+      reason: archiveReason,
+    })
+  }
 
-Attached is the Cylinder Test Report/Certificate for your records.
-
-Thank you for choosing BWA GAS – we greatly appreciate your business.
-
-Kind regards,
-Accounts Team
-BWA GAS`)
+  const handleDuplicate = () => {
+    router.push(`/reports/new?duplicate=${reportId}`)
+    toast.info("Duplicating report", {
+      description: "Creating a new report with the same details."
+    })
   }
 
   if (isLoading) {
@@ -239,7 +208,6 @@ BWA GAS`)
                     currentUser?.role === 'Super Admin' || 
                     currentUser?.role === 'Authorised Signatory'
   const canDelete = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
-  const canEmail = currentUser?.role === 'Admin' || currentUser?.role === 'Super Admin'
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -259,87 +227,132 @@ BWA GAS`)
     <div className="container mx-auto p-4 max-w-7xl space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Report Details</h1>
+        <div className="flex items-center space-x-4">
+          <Button variant="outline" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <h1 className="text-2xl font-bold">Report #{report.report_number}</h1>
+          <Badge className={getStatusColor(report.status)}>
+            {getStatusDisplay(report.status)}
+          </Badge>
+        </div>
+        
         <div className="flex space-x-2">
-          <Button asChild variant="outline">
-            <Link href={`/reports/${reportId}/edit`}>
-              <Edit className="h-4 w-4 mr-2" />
-              Edit Report
-            </Link>
-          </Button>
-          <Button asChild variant="outline">
-            <Link href="/reports">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Reports
-            </Link>
-          </Button>
+          {/* Actions Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <MoreVertical className="h-4 w-4 mr-2" />
+                Actions
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link href={`/reports/${reportId}/edit`}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Report
+                </Link>
+              </DropdownMenuItem>
+              
+              <DropdownMenuItem onClick={handleDuplicate}>
+                <Download className="h-4 w-4 mr-2" />
+                Duplicate Report
+              </DropdownMenuItem>
+              
+              <DropdownMenuSeparator />
+              
+              {canApprove && report.status !== 'approved' && (
+                <DropdownMenuItem onClick={() => setShowApprovalModal(true)}>
+                  <Check className="h-4 w-4 mr-2" />
+                  Approve Report
+                </DropdownMenuItem>
+              )}
+              
+              {canApprove && report.status === 'approved' && (
+                <DropdownMenuItem onClick={() => setShowUnapprovalModal(true)}>
+                  <X className="h-4 w-4 mr-2" />
+                  Unapprove Report
+                </DropdownMenuItem>
+              )}
+              
+              <DropdownMenuSeparator />
+              
+              {canDelete && (
+                <DropdownMenuItem onClick={() => setShowArchiveModal(true)}>
+                  <Archive className="h-4 w-4 mr-2" />
+                  Archive Report
+                </DropdownMenuItem>
+              )}
+
+              {canDelete && (
+                <DropdownMenuItem 
+                  onClick={() => setShowDeleteModal(true)}
+                  className="text-red-600 focus:text-red-600"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Report
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      {/* Report Information */}
+      {/* Report Details */}
+      {/* Customer Information - Full Width */}
       <Card>
         <CardHeader>
-          <CardTitle>Report Information</CardTitle>
+          <CardTitle>Customer Information</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InfoItem label="Report Number" value={report.report_number} />
-            <InfoItem label="Customer Name" value={report.customer_name} />
-            <InfoItem 
-              label="Address" 
-              value={`${report.address}, ${report.suburb}, ${report.state} ${report.postcode}`} 
-            />
-            <InfoItem label="Date" value={new Date(report.test_date).toLocaleDateString()} />
-            <InfoItem 
-              label="Status" 
-              value={
-                <Badge className={getStatusColor(report.status)}>
-                  {getStatusDisplay(report.status)}
-                </Badge>
-              } 
-            />
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <InfoItem label="Customer" value={report.customer} />
+            <InfoItem label="Major Customer" value={report.major_customer_id || 'N/A'} />
             <InfoItem label="Work Order" value={report.work_order || 'N/A'} />
+          </div>
+          <InfoItem label="Address" value={
+            typeof report.address === 'object' && report.address ? 
+              `${report.address.street}, ${report.address.suburb}, ${report.address.state} ${report.address.postcode}` :
+              report.address || 'N/A'
+          } />
+        </CardContent>
+      </Card>
+
+      {/* Test Information and Gas Details - Two Columns */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Test Information</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <InfoItem label="Test Date" value={new Date(report.test_date).toLocaleDateString()} />
+            <InfoItem label="Tester Names" value={
+              Array.isArray(report.tester_names) 
+                ? report.tester_names.join(', ') 
+                : report.tester_names || 'N/A'
+            } />
             <InfoItem label="Vehicle ID" value={report.vehicle_id} />
-          </div>
-        </CardContent>
-      </Card>
+            <InfoItem label="Status" value={
+              <Badge className={getStatusColor(report.status)}>
+                {getStatusDisplay(report.status)}
+              </Badge>
+            } />
+          </CardContent>
+        </Card>
 
-      {/* Gas Details */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Gas Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <InfoItem label="Gas Type" value={report.cylinder_gas_type} />
-            <InfoItem label="Size" value={report.size} />
-            <InfoItem label="Supplier" value={report.gas_supplier || 'N/A'} />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Test Details */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Test Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <InfoItem label="Testers" value={report.tester_names} />
-            <InfoItem label="Authorised Signatory" value={report.approved_signatory || 'Not approved'} />
-            {report.approved_signatory_signature && (
-              <div>
-                <p className="text-sm text-gray-500 mb-1">Signature</p>
-                <img 
-                  src={`/api/signatures/${report.approved_signatory_signature}`} 
-                  alt="Authorised Signatory's signature" 
-                  className="max-w-[150px] border rounded"
-                />
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Gas Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <InfoItem label="Gas Type" value={report.gas_type} />
+            <InfoItem label="Cylinder Size" value={report.size} />
+            <InfoItem label="Gas Supplier" value={report.gas_supplier || 'N/A'} />
+            <InfoItem label="Total Cylinders" value={report.cylinder_data?.length || 0} />
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Cylinder Data */}
       <Card>
@@ -347,126 +360,134 @@ BWA GAS`)
           <CardTitle>Cylinder Data</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cylinder No.</TableHead>
-                  <TableHead>Cylinder Specification</TableHead>
-                  <TableHead>W.C. (kg)</TableHead>
-                  <TableHead>Result of EXT Exam</TableHead>
-                  <TableHead>Result of INT Exam</TableHead>
-                  <TableHead>Barcode</TableHead>
-                  <TableHead>Remarks</TableHead>
-                  <TableHead>Recorded By</TableHead>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Cylinder No</TableHead>
+                <TableHead>Specification</TableHead>
+                <TableHead>WC</TableHead>
+                <TableHead>Ext Exam</TableHead>
+                <TableHead>Int Exam</TableHead>
+                <TableHead>Barcode</TableHead>
+                <TableHead>Remarks</TableHead>
+                <TableHead>Recorded By</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {report.cylinder_data?.map((cylinder: CylinderData, index: number) => (
+                <TableRow key={index}>
+                  <TableCell>{cylinder.cylinderNo}</TableCell>
+                  <TableCell>{cylinder.cylinderSpec}</TableCell>
+                  <TableCell>{cylinder.wc}</TableCell>
+                  <TableCell>
+                    <Badge className={cylinder.extExam === 'PASS' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                      {cylinder.extExam}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={cylinder.intExam === 'PASS' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                      {cylinder.intExam}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{cylinder.barcode}</TableCell>
+                  <TableCell>{cylinder.remarks || '-'}</TableCell>
+                  <TableCell>{cylinder.recordedBy || '-'}</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {Array.isArray(report.cylinder_data) && report.cylinder_data.length > 0 ? (
-                  report.cylinder_data.map((cylinder: CylinderData, index: number) => (
-                    <TableRow key={index}>
-                      <TableCell>{cylinder.cylinderNo || ''}</TableCell>
-                      <TableCell>{cylinder.cylinderSpec || ''}</TableCell>
-                      <TableCell>{cylinder.wc || ''}</TableCell>
-                      <TableCell>{cylinder.extExam || ''}</TableCell>
-                      <TableCell>{cylinder.intExam || ''}</TableCell>
-                      <TableCell>{cylinder.barcode || ''}</TableCell>
-                      <TableCell>{cylinder.remarks || ''}</TableCell>
-                      <TableCell>{cylinder.recordedBy || ''}</TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center">No cylinder data available</TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+              ))}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
 
-      {/* Action Buttons */}
-      <div className="flex flex-wrap gap-2">
-        {canApprove && report.status !== 'approved' && (
-          <Button 
-            onClick={() => setApproveModalOpen(true)}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            <Check className="h-4 w-4 mr-2" />
-            Approve Report
-          </Button>
-        )}
-        
-        <Button 
-          onClick={() => setShowPdfPreview(!showPdfPreview)}
-          variant="outline"
-        >
-          <Eye className="h-4 w-4 mr-2" />
-          {showPdfPreview ? 'Hide PDF Preview' : 'Show PDF Preview'}
-        </Button>
-        
-        <Button variant="outline">
-          <Download className="h-4 w-4 mr-2" />
-          Download PDF
-        </Button>
-        
-        {canEmail && (
-          <Button onClick={openEmailModal} variant="outline">
-            <Mail className="h-4 w-4 mr-2" />
-            Send Report to Customer
-          </Button>
-        )}
-        
-        {canDelete && (
-          <Button 
-            onClick={() => setDeleteModalOpen(true)}
-            variant="destructive"
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Delete Report
-          </Button>
-        )}
-      </div>
-
-      {/* PDF Preview */}
-      {showPdfPreview && (
+      {/* Approval Information and Audit Trail - Two Columns */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Approval Information */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Test Report PDF Preview</CardTitle>
-            <Button variant="outline" asChild>
-              <Link href={`/reports/${reportId}/preview`} target="_blank">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Open Preview in New Window
-              </Link>
-            </Button>
+          <CardHeader>
+            <CardTitle>Approval Information</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="w-full h-[600px] border rounded-lg bg-gray-100 flex items-center justify-center">
-              <p className="text-gray-500">PDF Preview will be implemented here</p>
-            </div>
+          <CardContent className="space-y-4">
+            {report.status === 'approved' && report.approved_signatory ? (
+              <>
+                <InfoItem label="Approved By" value={report.approved_signatory} />
+                <InfoItem label="Approved Date" value={new Date(report.updated_at).toLocaleDateString()} />
+                {report.approved_signatory_signature && (
+                  <div>
+                    <Label className="text-sm font-medium text-gray-600">Signature</Label>
+                    <img 
+                      src={`/api/signatures/${report.approved_signatory_signature}`} 
+                      alt="Authorized Signatory's signature" 
+                      className="max-w-[150px] border rounded mt-1"
+                    />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="text-gray-500 italic">Not yet approved</div>
+            )}
           </CardContent>
         </Card>
-      )}
 
-      {/* Approve Modal */}
-      <Dialog open={approveModalOpen} onOpenChange={setApproveModalOpen}>
+        {/* Audit Trail */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Audit Trail</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <InfoItem 
+              label="Created By" 
+              value={report.created_by_name || 'Unknown'} 
+            />
+            <InfoItem 
+              label="Created At" 
+              value={report.created_at ? new Date(report.created_at).toLocaleString() : 'Unknown'} 
+            />
+            {report.updated_by_name && report.updated_at !== report.created_at && (
+              <>
+                <InfoItem 
+                  label="Last Updated By" 
+                  value={report.updated_by_name} 
+                />
+                <InfoItem 
+                  label="Last Updated At" 
+                  value={new Date(report.updated_at).toLocaleString()} 
+                />
+              </>
+            )}
+            {report.approved_by_name && (
+              <InfoItem 
+                label="Approved By User" 
+                value={report.approved_by_name} 
+              />
+            )}
+            {report.submitted_by_name && (
+              <InfoItem 
+                label="Submitted By" 
+                value={report.submitted_by_name} 
+              />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Approval Modal */}
+      <Dialog open={showApprovalModal} onOpenChange={setShowApprovalModal}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Approve Report</DialogTitle>
             <DialogDescription>
-              Select an authorised signatory to approve this report.
+              Select a signatory to approve this report.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="signatory">Authorised Signatory</Label>
+            <div className="space-y-2">
+              <Label htmlFor="signatory">Authorized Signatory</Label>
               <Select value={selectedSignatory} onValueChange={setSelectedSignatory}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select signatory" />
+                  <SelectValue placeholder="Select a signatory" />
                 </SelectTrigger>
                 <SelectContent>
-                  {signatories.map((signatory) => (
+                  {signatories.map((signatory: { id: string; name: string }) => (
                     <SelectItem key={signatory.id} value={signatory.name}>
                       {signatory.name}
                     </SelectItem>
@@ -476,118 +497,122 @@ BWA GAS`)
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setApproveModalOpen(false)}>
+            <Button variant="outline" onClick={() => setShowApprovalModal(false)}>
               Cancel
             </Button>
             <Button 
               onClick={handleApprove}
-              disabled={approveReportMutation.status === 'pending' || !selectedSignatory}
+              disabled={approveMutation.isPending || !selectedSignatory}
             >
-              {approveReportMutation.status === 'pending' ? 'Approving...' : 'Approve Report'}
+              {approveMutation.isPending ? 'Approving...' : 'Approve Report'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unapprove Modal */}
+      <Dialog open={showUnapprovalModal} onOpenChange={setShowUnapprovalModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unapprove Report</DialogTitle>
+            <DialogDescription>
+              Enter the admin password to unapprove this report.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="unapprove-password">Admin Password</Label>
+              <Input
+                id="unapprove-password"
+                type="password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Enter admin password"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUnapprovalModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUnapprove}
+              disabled={unapproveMutation.isPending || !adminPassword}
+              variant="destructive"
+            >
+              {unapproveMutation.isPending ? 'Unapproving...' : 'Unapprove Report'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Archive Modal */}
+      <Dialog open={showArchiveModal} onOpenChange={setShowArchiveModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Archive Report</DialogTitle>
+            <DialogDescription>
+              Provide a reason for archiving this report.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="archive-reason">Reason for archiving</Label>
+              <Textarea
+                id="archive-reason"
+                value={archiveReason}
+                onChange={(e) => setArchiveReason(e.target.value)}
+                placeholder="Enter reason for archiving..."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowArchiveModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleArchive}
+              disabled={archiveMutation.isPending}
+              variant="destructive"
+            >
+              {archiveMutation.isPending ? 'Archiving...' : 'Archive Report'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Delete Modal */}
-      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Report</DialogTitle>
             <DialogDescription>
-              This action cannot be undone. Please enter your password to confirm.
+              This action cannot be undone. Enter the admin password to permanently delete this report.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="password">Password</Label>
+            <div className="space-y-2">
+              <Label htmlFor="delete-password">Admin Password</Label>
               <Input
-                id="password"
+                id="delete-password"
                 type="password"
-                value={deletePassword}
-                onChange={(e) => setDeletePassword(e.target.value)}
-                placeholder="Enter your password"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                placeholder="Enter admin password"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteModalOpen(false)}>
+            <Button variant="outline" onClick={() => setShowDeleteModal(false)}>
               Cancel
             </Button>
             <Button 
-              variant="destructive"
               onClick={handleDelete}
-              disabled={deleteReportMutation.status === 'pending' || !deletePassword}
+              disabled={deleteReportMutation.isPending || !adminPassword}
+              variant="destructive"
             >
-              {deleteReportMutation.status === 'pending' ? 'Deleting...' : 'Delete Report'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Email Modal */}
-      <Dialog open={emailModalOpen} onOpenChange={setEmailModalOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Send Report to Customer</DialogTitle>
-            <DialogDescription>
-              Enter the customer's email address and customize the message.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="email">Customer Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={customerEmail}
-                onChange={(e) => setCustomerEmail(e.target.value)}
-                placeholder="customer@example.com"
-              />
-            </div>
-            <div>
-              <Label htmlFor="message">Message</Label>
-              <Textarea
-                id="message"
-                value={emailBody}
-                onChange={(e) => setEmailBody(e.target.value)}
-                rows={8}
-                className="resize-none"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEmailModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={() => setEmailConfirmOpen(true)}
-              disabled={!customerEmail || !emailBody}
-            >
-              Continue
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Email Confirmation Modal */}
-      <Dialog open={emailConfirmOpen} onOpenChange={setEmailConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm Email Send</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to send this report to {customerEmail}?
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEmailConfirmOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleSendEmail}
-              disabled={sendEmailMutation.status === 'pending'}
-            >
-              {sendEmailMutation.status === 'pending' ? 'Sending...' : 'Send Email'}
+              {deleteReportMutation.isPending ? 'Deleting...' : 'Delete Report'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -596,10 +621,9 @@ BWA GAS`)
   )
 }
 
-// Helper component for displaying info items
 const InfoItem = ({ label, value }: { label: string; value: React.ReactNode }) => (
-  <div>
-    <p className="text-sm text-gray-500 mb-1">{label}</p>
-    <p className="font-semibold">{typeof value === 'string' ? value : value}</p>
+  <div className="space-y-1">
+    <Label className="text-sm font-medium text-gray-600">{label}</Label>
+    <div className="text-sm">{value || 'N/A'}</div>
   </div>
 ) 

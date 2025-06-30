@@ -1,6 +1,7 @@
 import { createTRPCRouter, authedProcedure } from '@/lib/trpc/server'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
+import { logUserActivity } from '@/lib/utils/unified-logging'
 
 const reportSchema = z.object({
   customer: z.string().min(1, 'Customer name is required'),
@@ -39,9 +40,12 @@ const updateReportSchema = reportSchema.extend({
 
 export const reportsRouter = createTRPCRouter({
   list: authedProcedure.query(async ({ ctx }) => {
-    // We are not using Supabase auth at the moment, so we can't use RLS effectively
-    // yet. We'll fetch directly. This assumes the 'reports' table is readable.
-    const { data: reports, error } = await ctx.supabaseService.from('reports').select('*')
+    // Fetch active (non-archived) reports only
+    const { data: reports, error } = await ctx.supabaseService
+      .from('reports')
+      .select('*')
+      .is('deleted_at', null)  // Exclude soft deleted reports
+      .order('created_at', { ascending: false })
 
     if (error) {
       console.error('Failed to fetch reports from Supabase:', error)
@@ -58,22 +62,68 @@ export const reportsRouter = createTRPCRouter({
     .input(reportSchema)
     .mutation(async ({ ctx, input }) => {
       try {
+        // Get the next report number
+        const { data: reports, error: numberError } = await ctx.supabaseService
+          .from('reports')
+          .select('report_number')
+          .order('report_number', { ascending: false })
+          .limit(1);
+
+        if (numberError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to generate report number.',
+            cause: numberError,
+          });
+        }
+
+        const lastReportNumber = reports && reports.length > 0 ? parseInt(reports[0].report_number) : 10000;
+        const nextReportNumber = lastReportNumber + 1;
+
         const { data, error } = await ctx.supabase
           .from('reports')
           .insert({
             ...input,
             user_id: ctx.user.id,
-            status: 'draft', // Default status
+            created_by: ctx.user.id,
+            status: 'pending',
+            report_number: nextReportNumber,
           })
           .select()
           .single()
 
         if (error) {
+          console.error('Database error during report creation:', error);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to create report in database.',
             cause: error,
           })
+        }
+
+        // Log the report creation action
+        try {
+          await logUserActivity(
+            ctx.user.id,
+            'REPORT_CREATED',
+            `Report #${data.report_number} created for customer: ${data.customer}`,
+            {
+              resourceType: 'report',
+              resourceId: data.id,
+              resourceName: `Report #${data.report_number}`,
+              details: {
+                report_number: data.report_number,
+                customer: data.customer,
+                gas_type: data.gas_type,
+                vehicle_id: data.vehicle_id,
+                cylinder_count: data.cylinder_data?.length || 0,
+              },
+              level: 'INFO'
+            }
+          );
+        } catch (logError) {
+          console.error('Failed to log report creation:', logError);
+          // Continue with the operation even if logging fails
         }
 
         return data
@@ -118,26 +168,121 @@ export const reportsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       try {
         const { id, ...reportData } = input;
+        
+        // Get original report for logging purposes
+        const { data: originalReport } = await ctx.supabase
+          .from('reports')
+          .select('*')
+          .eq('id', id)
+          .single();
+        
+        // Remove undefined values to avoid Supabase issues
+        const cleanData = Object.fromEntries(
+          Object.entries(reportData).filter(([, value]) => value !== undefined)
+        );
+
         const { data, error } = await ctx.supabase
           .from('reports')
-          .update(reportData)
+          .update({
+            ...cleanData,
+            updated_at: new Date().toISOString(),
+            updated_by: ctx.user.id,
+          })
           .eq('id', id)
           .select()
           .single();
 
         if (error) {
+          console.error('Database error during report update:', error);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to update report in database.',
             cause: error,
           });
         }
+
+        // Log the report update action
+        try {
+          await logUserActivity(
+            ctx.user.id,
+            'REPORT_UPDATED',
+            `Report #${data.report_number} updated`,
+            {
+              resourceType: 'report',
+              resourceId: id,
+              resourceName: `Report #${data.report_number}`,
+              details: {
+                report_number: data.report_number,
+                customer: data.customer,
+                changes_made: Object.keys(cleanData),
+                before_state: originalReport ? {
+                  customer: originalReport.customer,
+                  gas_type: originalReport.gas_type,
+                  status: originalReport.status,
+                } : null,
+                after_state: {
+                  customer: data.customer,
+                  gas_type: data.gas_type,
+                  status: data.status,
+                },
+              },
+              level: 'INFO'
+            }
+          );
+        } catch (logError) {
+          console.error('Failed to log report update:', logError);
+          // Continue with the operation even if logging fails
+        }
+
         return data;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'An unexpected error occurred while updating the report.',
+        });
+      }
+    }),
+
+  // Duplicate report
+  duplicate: authedProcedure
+    .input(z.object({ reportId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const { data: originalReport, error } = await ctx.supabase
+          .from('reports')
+          .select('*')
+          .eq('id', input.reportId)
+          .single();
+
+        if (error || !originalReport) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Report not found.',
+          });
+        }
+
+        // Return the report data without ID and status for duplication
+        const duplicateData = {
+          customer: originalReport.customer,
+          address: originalReport.address,
+          gas_type: originalReport.gas_type,
+          gas_supplier: originalReport.gas_supplier,
+          size: originalReport.size,
+          test_date: originalReport.test_date,
+          tester_names: originalReport.tester_names,
+          vehicle_id: originalReport.vehicle_id,
+          work_order: originalReport.work_order,
+          major_customer_id: originalReport.major_customer_id,
+          cylinder_data: originalReport.cylinder_data,
+        };
+
+        return duplicateData;
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to duplicate report.',
         });
       }
     }),
@@ -221,10 +366,10 @@ export const reportsRouter = createTRPCRouter({
         });
       }
 
-      const lastReportNumber = reports && reports.length > 0 ? reports[0].report_number : 0;
-      const nextNumber = (lastReportNumber || 0) + 1;
+      const lastReportNumber = reports && reports.length > 0 ? parseInt(reports[0].report_number) : 10000;
+      const nextNumber = lastReportNumber + 1;
       
-      return `BWA-${String(nextNumber).padStart(4, '0')}`;
+      return nextNumber;
     } catch (error) {
       if (error instanceof TRPCError) throw error;
       throw new TRPCError({
@@ -248,6 +393,7 @@ export const reportsRouter = createTRPCRouter({
             status: 'approved',
             approved_signatory: input.signatoryName,
             updated_at: new Date().toISOString(),
+            approved_by: ctx.user.id,
           })
           .eq('id', input.reportId)
           .select()
@@ -261,12 +407,134 @@ export const reportsRouter = createTRPCRouter({
           });
         }
 
+        // Log the report approval action
+        try {
+          await logUserActivity(
+            ctx.user.id,
+            'REPORT_APPROVED',
+            `Report #${data.report_number} approved by ${input.signatoryName}`,
+            {
+              resourceType: 'report',
+              resourceId: input.reportId,
+              resourceName: `Report #${data.report_number}`,
+              details: {
+                report_number: data.report_number,
+                customer: data.customer,
+                approved_signatory: input.signatoryName,
+                approval_timestamp: new Date().toISOString(),
+              },
+              level: 'INFO'
+            }
+          );
+        } catch (logError) {
+          console.error('Failed to log report approval:', logError);
+          // Continue with the operation even if logging fails
+        }
+
         return data;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to approve report.',
+        });
+      }
+    }),
+
+  // Unapprove report
+  unapprove: authedProcedure
+    .input(z.object({
+      reportId: z.string(),
+      password: z.string().min(1, 'Password is required'),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        console.log('Unapprove request for report:', input.reportId);
+        // Verify admin password
+        const { data: settings, error: settingsError } = await ctx.supabaseService
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'admin_password')
+          .eq('category', 'security')
+          .single();
+
+        if (settingsError || !settings) {
+          console.error('Admin password settings error:', settingsError);
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Admin password not configured.',
+          });
+        }
+
+        // Handle potential JSON string value
+        const adminPassword = typeof settings.value === 'string' 
+          ? settings.value.replace(/"/g, '') 
+          : settings.value;
+
+        console.log('Password verification - Input:', input.password, 'Admin:', adminPassword);
+
+        if (input.password !== adminPassword) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Invalid admin password.',
+          });
+        }
+
+        console.log('Password verified successfully');
+
+        console.log('Updating report status to pending...');
+        const { data, error } = await ctx.supabase
+          .from('reports')
+          .update({
+            status: 'pending',
+            approved_signatory: null,
+            updated_at: new Date().toISOString(),
+            updated_by: ctx.user.id,  // Add the user who performed the unapproval
+          })
+          .eq('id', input.reportId)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Database error during unapprove:', error);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to unapprove report.',
+            cause: error,
+          });
+        }
+
+        console.log('Report unapproved successfully:', data);
+
+        // Log the unapproval action (don't let logging errors break the operation)
+        try {
+          await logUserActivity(
+            ctx.user.id,
+            'report_unapproved',
+            `Report ${data.report_number} was unapproved by admin`,
+            {
+              resourceType: 'report',
+              resourceId: input.reportId,
+              resourceName: `Report #${data.report_number}`,
+              details: {
+                report_id: input.reportId,
+                report_number: data.report_number,
+                admin_action: true,
+              },
+              level: 'INFO'
+            }
+          );
+        } catch (logError) {
+          console.error('Failed to log unapproval action:', logError);
+          // Continue with the operation even if logging fails
+        }
+
+        return data;
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to unapprove report.',
         });
       }
     }),
@@ -279,12 +547,37 @@ export const reportsRouter = createTRPCRouter({
     }))
     .mutation(async ({ ctx, input }) => {
       try {
-        // Note: In a real implementation, you would verify the password here
-        // For now, we'll just delete the report if password is provided
-        if (!input.password) {
+        // Get report details for logging before deletion
+        const { data: report } = await ctx.supabase
+          .from('reports')
+          .select('*')
+          .eq('id', input.reportId)
+          .single();
+
+        // Verify admin password
+        const { data: settings, error: settingsError } = await ctx.supabaseService
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'admin_password')
+          .eq('category', 'security')
+          .single();
+
+        if (settingsError || !settings) {
           throw new TRPCError({
             code: 'BAD_REQUEST',
-            message: 'Password is required.',
+            message: 'Admin password not configured.',
+          });
+        }
+
+        // Handle potential JSON string value
+        const adminPassword = typeof settings.value === 'string' 
+          ? settings.value.replace(/"/g, '') 
+          : settings.value;
+
+        if (input.password !== adminPassword) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Invalid admin password.',
           });
         }
 
@@ -299,6 +592,31 @@ export const reportsRouter = createTRPCRouter({
             message: 'Failed to delete report.',
             cause: error,
           });
+        }
+
+        // Log the permanent deletion action
+        try {
+          await logUserActivity(
+            ctx.user.id,
+            'REPORT_DELETED',
+            `Report #${report?.report_number || 'Unknown'} permanently deleted`,
+            {
+              resourceType: 'report',
+              resourceId: input.reportId,
+              resourceName: `Report #${report?.report_number || 'Unknown'}`,
+              details: {
+                report_number: report?.report_number,
+                customer: report?.customer,
+                deletion_type: 'permanent',
+                admin_action: true,
+                password_verified: true,
+              },
+              level: 'WARNING'
+            }
+          );
+        } catch (logError) {
+          console.error('Failed to log report deletion:', logError);
+          // Continue with the operation even if logging fails
         }
 
         return { success: true };
@@ -368,4 +686,295 @@ export const reportsRouter = createTRPCRouter({
         });
       }
     }),
+
+  // Archive/Restore functionality
+  archiveReport: authedProcedure
+    .input(z.object({ 
+      id: z.string(),
+      reason: z.string().optional()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { data: report, error: fetchError } = await ctx.supabaseService
+          .from('reports')
+          .select('id, status, customer')
+          .eq('id', input.id)
+          .single();
+
+        if (fetchError || !report) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Report not found',
+          });
+        }
+
+        // Soft delete - set deleted_at and deleted_by
+        const { error: updateError } = await ctx.supabaseService
+          .from('reports')
+          .update({
+            deleted_at: new Date().toISOString(),
+            deleted_by: ctx.user.id,
+            updated_at: new Date().toISOString(),
+            updated_by: ctx.user.id,
+          })
+          .eq('id', input.id);
+
+        if (updateError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to archive report',
+            cause: updateError,
+          });
+        }
+
+        // Log the action
+        await logUserActivity(
+          ctx.user.id,
+          'archive_report',
+          `Archived report for customer: ${report.customer}`,
+          {
+            resourceType: 'report',
+            resourceId: input.id,
+            details: { 
+              customer: report.customer,
+              reason: input.reason || 'No reason provided'
+            }
+          }
+        );
+
+        return { success: true, message: 'Report archived successfully' };
+      } catch (error) {
+        console.error('Error archiving report:', error);
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to archive report',
+        });
+      }
+    }),
+
+  restoreReport: authedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const { data: report, error: fetchError } = await ctx.supabaseService
+          .from('reports')
+          .select('id, customer, deleted_at')
+          .eq('id', input.id)
+          .single();
+
+        if (fetchError || !report) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Archived report not found',
+          });
+        }
+
+        if (!report.deleted_at) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Report is not archived',
+          });
+        }
+
+        // Restore - clear deleted_at and deleted_by
+        const { error: updateError } = await ctx.supabaseService
+          .from('reports')
+          .update({
+            deleted_at: null,
+            deleted_by: null,
+            updated_at: new Date().toISOString(),
+            updated_by: ctx.user.id,
+          })
+          .eq('id', input.id);
+
+        if (updateError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to restore report',
+            cause: updateError,
+          });
+        }
+
+        // Log the action
+        await logUserActivity(
+          ctx.user.id,
+          'restore_report',
+          `Restored report for customer: ${report.customer}`,
+          {
+            resourceType: 'report',
+            resourceId: input.id,
+            details: { customer: report.customer }
+          }
+        );
+
+        return { success: true, message: 'Report restored successfully' };
+      } catch (error) {
+        console.error('Error restoring report:', error);
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to restore report',
+        });
+      }
+    }),
+
+  permanentlyDeleteReport: authedProcedure
+    .input(z.object({ 
+      id: z.string(),
+      adminPassword: z.string()
+    }))
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // Verify admin password
+        const { data: settings, error: settingsError } = await ctx.supabaseService
+          .from('app_settings')
+          .select('value')
+          .eq('category', 'security')
+          .eq('key', 'admin_password')
+          .single();
+
+        if (settingsError || !settings) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to verify admin password',
+          });
+        }
+
+        const adminPassword = typeof settings.value === 'string' 
+          ? settings.value.replace(/"/g, '') 
+          : settings.value;
+
+        if (adminPassword !== input.adminPassword) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Invalid admin password',
+          });
+        }
+
+        // Get report details before deletion for logging
+        const { data: report, error: fetchError } = await ctx.supabaseService
+          .from('reports')
+          .select('id, report_number, customer, deleted_at')
+          .eq('id', input.id)
+          .single();
+
+        if (fetchError || !report) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Report not found',
+          });
+        }
+
+        if (!report.deleted_at) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Report must be archived before permanent deletion',
+          });
+        }
+
+        // Permanently delete the report
+        const { error: deleteError } = await ctx.supabaseService
+          .from('reports')
+          .delete()
+          .eq('id', input.id);
+
+        if (deleteError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to permanently delete report',
+            cause: deleteError,
+          });
+        }
+
+        // Log the action
+        await logUserActivity(
+          ctx.user.id,
+          'permanently_delete_report',
+          `Permanently deleted report ${report.report_number} for customer: ${report.customer}`,
+          {
+            resourceType: 'report',
+            resourceId: input.id,
+            details: { 
+              report_number: report.report_number,
+              customer: report.customer 
+            },
+            level: 'WARNING'
+          }
+        );
+
+        return { success: true, message: 'Report permanently deleted' };
+      } catch (error) {
+        console.error('Error permanently deleting report:', error);
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to permanently delete report',
+        });
+      }
+    }),
+
+  getArchivedReports: authedProcedure.query(async ({ ctx }) => {
+    try {
+      const { data: reports, error } = await ctx.supabaseService
+        .from('reports')
+        .select(`
+          id,
+          report_number,
+          customer,
+          status,
+          created_at,
+          deleted_at,
+          deleted_by,
+          test_date,
+          gas_type,
+          size,
+          vehicle_id,
+          work_order
+        `)
+        .not('deleted_at', 'is', null)
+        .order('deleted_at', { ascending: false });
+
+      if (error) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch archived reports',
+          cause: error,
+        });
+      }
+
+      // Get user names for deleted_by field
+      const userIds = [...new Set(reports?.map(r => r.deleted_by).filter(Boolean))];
+      let users: Array<{ id: string; first_name: string; last_name: string }> = [];
+      
+      if (userIds.length > 0) {
+        const { data: usersData } = await ctx.supabaseService
+          .from('users')
+          .select('id, first_name, last_name')
+          .in('id', userIds);
+        users = usersData || [];
+      }
+
+      const formattedReports = (reports || []).map(report => {
+        const deletedByUser = users.find(u => u.id === report.deleted_by);
+        return {
+          ...report,
+          deleted_by_name: deletedByUser 
+            ? `${deletedByUser.first_name} ${deletedByUser.last_name}`.trim() 
+            : 'Unknown User',
+          formatted_deleted_date: new Date(report.deleted_at).toLocaleDateString(),
+          formatted_created_date: new Date(report.created_at).toLocaleDateString(),
+        };
+      });
+
+      return formattedReports;
+    } catch (error) {
+      console.error('Error fetching archived reports:', error);
+      if (error instanceof TRPCError) throw error;
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch archived reports',
+      });
+    }
+  }),
 }) 

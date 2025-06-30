@@ -15,7 +15,10 @@ import {
   MoreHorizontal,
   Calendar,
   User,
-  Building
+  Building,
+  Filter,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -44,20 +47,37 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { api } from "@/lib/trpc/client"
 
 interface FilterState {
   status: string
   search: string
   dateRange: string
+}
+
+interface PaginationState {
+  currentPage: number
+  itemsPerPage: number
 }
 
 interface Report {
@@ -88,6 +108,11 @@ export default function ReportsPage() {
     status: 'all',
     search: '',
     dateRange: 'all'
+  })
+  
+  const [pagination, setPagination] = useState<PaginationState>({
+    currentPage: 1,
+    itemsPerPage: 10
   })
   
   const [selectedReport, setSelectedReport] = useState<Report | null>(null)
@@ -129,23 +154,43 @@ export default function ReportsPage() {
     })
   }, [reports, filter])
 
+  // Pagination logic
+  const paginatedReports = useMemo(() => {
+    const startIndex = (pagination.currentPage - 1) * pagination.itemsPerPage
+    const endIndex = startIndex + pagination.itemsPerPage
+    return filteredReports.slice(startIndex, endIndex)
+  }, [filteredReports, pagination])
+
+  const totalPages = Math.ceil(filteredReports.length / pagination.itemsPerPage)
+
   // Status badge component
   const StatusBadge = ({ status }: { status: string }) => {
-    const getVariant = (status: string) => {
+    const getStatusColor = (status: string) => {
       switch (status.toLowerCase()) {
-        case 'approved': return 'default'
-        case 'submitted': return 'secondary'
-        case 'draft': return 'outline'
-        case 'rejected': return 'destructive'
-        default: return 'secondary'
+        case 'approved': return 'bg-green-100 text-green-800'
+        case 'pending': 
+        case 'submitted': return 'bg-amber-100 text-amber-800'
+        case 'draft': return 'bg-gray-100 text-gray-800'
+        case 'rejected': 
+        case 'archived':
+        case 'deleted': return 'bg-red-100 text-red-800'
+        default: return 'bg-gray-100 text-gray-800'
       }
     }
 
+    const displayStatus = status === 'submitted' ? 'Pending' : status.charAt(0).toUpperCase() + status.slice(1)
+
     return (
-      <Badge variant={getVariant(status)}>
-        {status.charAt(0).toUpperCase() + status.slice(1)}
+      <Badge className={getStatusColor(status)}>
+        {displayStatus}
       </Badge>
     )
+  }
+
+  // Reset pagination when filters change
+  const handleFilterChange = (newFilter: Partial<FilterState>) => {
+    setFilter({ ...filter, ...newFilter })
+    setPagination({ ...pagination, currentPage: 1 })
   }
 
   // Quick view modal
@@ -165,6 +210,79 @@ export default function ReportsPage() {
 
   const handleEditReport = (report: Report) => {
     router.push(`/reports/${report.id}/edit`)
+  }
+
+  // Tester avatars component
+  const TesterAvatars = ({ testers }: { testers: string[] }) => {
+    if (!Array.isArray(testers) || testers.length === 0) {
+      return <span className="text-sm text-muted-foreground">N/A</span>
+    }
+
+    const getInitials = (name: string) => {
+      const nameParts = name.trim().split(' ').filter(part => part.length > 0)
+      if (nameParts.length >= 2) {
+        // First name initial + Last name initial
+        return (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
+      } else if (nameParts.length === 1) {
+        // Single name, take first 2 characters
+        return nameParts[0].substring(0, 2).toUpperCase()
+      }
+      return 'NA'
+    }
+
+    const getAvatarColor = (name: string) => {
+      const colors = [
+        'bg-blue-700',
+        'bg-green-700', 
+        'bg-purple-700',
+        'bg-orange-700',
+        'bg-pink-700',
+        'bg-indigo-700',
+        'bg-red-700',
+        'bg-teal-700'
+      ]
+      const index = name.length % colors.length
+      return colors[index]
+    }
+
+    return (
+      <TooltipProvider>
+        <div className="flex -space-x-2">
+          {testers.slice(0, 3).map((tester, index) => (
+            <Tooltip key={index}>
+              <TooltipTrigger asChild>
+                <Avatar className="h-8 w-8 border-2 border-background">
+                  <AvatarFallback className={`text-white text-xs font-medium ${getAvatarColor(tester)}`}>
+                    {getInitials(tester)}
+                  </AvatarFallback>
+                </Avatar>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{tester}</p>
+              </TooltipContent>
+            </Tooltip>
+          ))}
+          {testers.length > 3 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Avatar className="h-8 w-8 border-2 border-background bg-gray-500">
+                  <AvatarFallback className="text-white text-xs font-medium">
+                    +{testers.length - 3}
+                  </AvatarFallback>
+                </Avatar>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="space-y-1">
+                  {testers.slice(3).map((tester, index) => (
+                    <p key={index}>{tester}</p>
+                  ))}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      </TooltipProvider>
+    )
   }
 
   // Stats cards
@@ -201,6 +319,12 @@ export default function ReportsPage() {
           <Button variant="outline" onClick={() => refetch()}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/admin/archive">
+              <FileText className="w-4 h-4 mr-2" />
+              Archive
+            </Link>
           </Button>
           <Button asChild>
             <Link href="/reports/new">
@@ -251,64 +375,127 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Search</label>
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search reports..."
-                  value={filter.search}
-                  onChange={(e) => setFilter({ ...filter, search: e.target.value })}
-                  className="pl-8"
-                />
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Status</label>
-              <Select value={filter.status} onValueChange={(value) => setFilter({ ...filter, status: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="submitted">Submitted</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Date Range</label>
-              <Select value={filter.dateRange} onValueChange={(value) => setFilter({ ...filter, dateRange: value })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="week">Last 7 Days</SelectItem>
-                  <SelectItem value="month">Last 30 Days</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Actions</label>
-              <Button variant="outline" className="w-full">
-                <Download className="w-4 h-4 mr-2" />
-                Export CSV
-              </Button>
-            </div>
+      {/* Filters and Controls */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search reports..."
+              value={filter.search}
+              onChange={(e) => handleFilterChange({ search: e.target.value })}
+              className="pl-8 w-64"
+            />
           </div>
-        </CardContent>
-      </Card>
+          
+          {/* Filter Dropdown */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="border-dashed">
+                <Filter className="mr-2 h-4 w-4" />
+                Filters
+                {(filter.status !== 'all' || filter.dateRange !== 'all') && (
+                  <span className="ml-2 h-2 w-2 rounded-full bg-primary" />
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="start">
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium mb-2">Status</h4>
+                  <Select value={filter.status} onValueChange={(value) => handleFilterChange({ status: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="submitted">Pending</SelectItem>
+                      <SelectItem value="approved">Approved</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div>
+                  <h4 className="font-medium mb-2">Date Range</h4>
+                  <Select value={filter.dateRange} onValueChange={(value) => handleFilterChange({ dateRange: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Time</SelectItem>
+                      <SelectItem value="today">Today</SelectItem>
+                      <SelectItem value="week">Last 7 Days</SelectItem>
+                      <SelectItem value="month">Last 30 Days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="pt-2 border-t">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setFilter({ status: 'all', search: '', dateRange: 'all' })}
+                    className="w-full"
+                  >
+                    Clear Filters
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+          
+          {/* Export */}
+          <Button variant="outline">
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+        </div>
+        
+        {/* Pagination Controls */}
+        <div className="flex items-center space-x-2">
+          <span className="text-sm text-muted-foreground">
+            Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} to {Math.min(pagination.currentPage * pagination.itemsPerPage, filteredReports.length)} of {filteredReports.length} reports
+          </span>
+          
+          <Select 
+            value={pagination.itemsPerPage.toString()} 
+            onValueChange={(value) => setPagination({ currentPage: 1, itemsPerPage: parseInt(value) })}
+          >
+            <SelectTrigger className="w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">10</SelectItem>
+              <SelectItem value="20">20</SelectItem>
+              <SelectItem value="50">50</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <div className="flex items-center space-x-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPagination({ ...pagination, currentPage: pagination.currentPage - 1 })}
+              disabled={pagination.currentPage <= 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium px-2">
+              {pagination.currentPage} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPagination({ ...pagination, currentPage: pagination.currentPage + 1 })}
+              disabled={pagination.currentPage >= totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
 
       {/* Reports Table */}
       <Card>
@@ -327,10 +514,15 @@ export default function ReportsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredReports.map((report: Report) => (
+              {paginatedReports.map((report: Report) => (
                 <TableRow key={report.id}>
                   <TableCell className="font-medium">
-                    {report.report_number}
+                    <Link 
+                      href={`/reports/${report.id}`}
+                      className="text-primary hover:underline cursor-pointer"
+                    >
+                      {report.report_number}
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <div>
@@ -348,10 +540,8 @@ export default function ReportsPage() {
                   <TableCell>
                     <StatusBadge status={report.status} />
                   </TableCell>
-                  <TableCell className="text-sm">
-                    {Array.isArray(report.tester_names) 
-                      ? report.tester_names.join(', ') || 'N/A'
-                      : 'N/A'}
+                  <TableCell>
+                    <TesterAvatars testers={report.tester_names || []} />
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>
@@ -384,21 +574,62 @@ export default function ReportsPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {filteredReports.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
-                    <div className="text-muted-foreground">
-                      {filter.search || filter.status !== 'all' || filter.dateRange !== 'all'
-                        ? 'No reports match your filters'
-                        : 'No reports found'}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                             {paginatedReports.length === 0 && (
+                 <TableRow>
+                   <TableCell colSpan={8} className="text-center py-8">
+                     <div className="text-muted-foreground">
+                       {filter.search || filter.status !== 'all' || filter.dateRange !== 'all'
+                         ? 'No reports match your filters'
+                         : 'No reports found'}
+                     </div>
+                   </TableCell>
+                 </TableRow>
+               )}
+             </TableBody>
+           </Table>
+         </CardContent>
+       </Card>
+
+       {/* Pagination Footer */}
+       {filteredReports.length > 0 && (
+         <div className="flex items-center justify-center space-x-2 py-4">
+           <Button
+             variant="outline"
+             size="sm"
+             onClick={() => setPagination({ ...pagination, currentPage: 1 })}
+             disabled={pagination.currentPage <= 1}
+           >
+             First
+           </Button>
+           <Button
+             variant="outline"
+             size="sm"
+             onClick={() => setPagination({ ...pagination, currentPage: pagination.currentPage - 1 })}
+             disabled={pagination.currentPage <= 1}
+           >
+             <ChevronLeft className="h-4 w-4" />
+           </Button>
+           <span className="text-sm font-medium px-4">
+             Page {pagination.currentPage} of {totalPages}
+           </span>
+           <Button
+             variant="outline"
+             size="sm"
+             onClick={() => setPagination({ ...pagination, currentPage: pagination.currentPage + 1 })}
+             disabled={pagination.currentPage >= totalPages}
+           >
+             <ChevronRight className="h-4 w-4" />
+           </Button>
+           <Button
+             variant="outline"
+             size="sm"
+             onClick={() => setPagination({ ...pagination, currentPage: totalPages })}
+             disabled={pagination.currentPage >= totalPages}
+           >
+             Last
+           </Button>
+         </div>
+       )}
 
       {/* Quick View Modal */}
       <Dialog open={quickViewOpen} onOpenChange={setQuickViewOpen}>

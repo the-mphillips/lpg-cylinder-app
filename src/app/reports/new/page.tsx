@@ -128,24 +128,7 @@ const debounce = (func: (values: ReportFormData) => void, delay: number) => {
   return debounced
 }
 
-const stateOptions = [
-  { label: 'Victoria', value: 'VIC' },
-  { label: 'New South Wales', value: 'NSW' },
-  { label: 'Queensland', value: 'QLD' },
-  { label: 'Western Australia', value: 'WA' },
-  { label: 'South Australia', value: 'SA' },
-  { label: 'Tasmania', value: 'TAS' },
-  { label: 'Australian Capital Territory', value: 'ACT' },
-  { label: 'Northern Territory', value: 'NT' },
-]
-
-const vehicleOptions = [
-  'BWA-01', 'BWA-02', 'BWA-03', 'BWA-04', 'BWA-05',
-  'BWA-06', 'BWA-07', 'BWA-08', 'BWA-TAS', 'Other'
-]
-
-const sizeOptions = ['4kg', '9kg', '15kg', '45kg', '90kg', '190kg', '210kg', 'Other']
-const supplierOptions = ['SUPAGAS', 'ELGAS', 'ORIGIN', 'Other']
+// Remove hardcoded options - now fetched dynamically
 
 export default function NewReportPage() {
   const router = useRouter()
@@ -155,10 +138,21 @@ export default function NewReportPage() {
   const [previewData, setPreviewData] = useState<ReportFormData | null>(null)
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false)
 
+  // Check for duplicate parameter
+  const duplicateReportId = searchParams.get('duplicate')
+  const isDuplicate = !!duplicateReportId
+
   // API queries
   const { data: majorCustomers = [] } = api.reports.getMajorCustomers.useQuery()
   const { data: testers = [] } = api.reports.getTesters.useQuery()
   const { data: nextReportNumber = '' } = api.reports.getNextReportNumber.useQuery()
+  const { data: formDefaults } = api.settings.getFormDefaults.useQuery()
+  
+  // Duplicate query - only run if duplicating
+  const { data: duplicateData } = api.reports.duplicate.useQuery(
+    { reportId: duplicateReportId! }, 
+    { enabled: isDuplicate }
+  )
 
   // Mutations
   const createReportMutation = api.reports.create.useMutation({
@@ -221,35 +215,104 @@ export default function NewReportPage() {
     () => debounce((values: ReportFormData) => {
       try {
         localStorage.setItem('newReportFormData', JSON.stringify(values))
-        toast({
-          title: "Auto-saved",
-          description: "Form data has been saved locally",
-          variant: "default",
-        })
+        // Only show toast notification occasionally to reduce noise
+        const shouldShowToast = Math.random() < 0.1 // 10% chance to show toast
+        if (shouldShowToast) {
+          toast({
+            title: "Auto-saved",
+            description: "Form data has been saved locally",
+            variant: "default",
+          })
+        }
       } catch (error) {
         console.error('Error auto-saving form data:', error)
       }
-    }, 2000),
+    }, 3000), // Increased debounce time to 3 seconds
     [toast]
   )
 
   // Load saved data or duplicate report on mount (only once)
   useEffect(() => {
+    // Prevent running if already completed initial load
+    if (isInitialLoadComplete) return
+
     const loadInitialData = async () => {
-      const duplicateId = searchParams.get('duplicate')
-      
-      if (duplicateId) {
+      if (isDuplicate && duplicateData) {
         try {
-          // TODO: Implement duplicate functionality when getById is available
+          // Transform duplicate data to form format
+          const address = duplicateData.address || {}
+          const testers = Array.isArray(duplicateData.tester_names) ? duplicateData.tester_names : []
+          const cylinders = Array.isArray(duplicateData.cylinder_data) ? duplicateData.cylinder_data : []
+          
+          // Determine customer type
+          const customerType = duplicateData.major_customer_id ? 'major' : 'other'
+          
+          // Parse customer name for major customers
+          let customerName = duplicateData.customer || ''
+          let majorCustomer = ''
+          
+          if (customerType === 'major') {
+            // Set the major customer ID (not name)
+            majorCustomer = duplicateData.major_customer_id || ''
+            
+            if (customerName.includes(' - ')) {
+              const parts = customerName.split(' - ')
+              customerName = parts[1] || ''
+            } else {
+              customerName = ''
+            }
+          }
+
+          const formData: ReportFormData = {
+            customerType,
+            majorCustomer,
+            customerName,
+            address: address.street || '',
+            suburb: address.suburb || '',
+            state: address.state || '',
+            postcode: address.postcode || '',
+            cylinder_gas_type: duplicateData.gas_type || 'LPG',
+            gasTypeOther: '',
+            size: duplicateData.size || '',
+            sizeOther: '',
+            gas_supplier: duplicateData.gas_supplier || '',
+            supplierOther: '',
+            test_date: new Date().toISOString().split('T')[0], // Use today's date for new report
+            vehicleId: duplicateData.vehicle_id || '',
+            vehicleIdOther: '',
+            work_order: '', // Clear work order for new report
+            primaryTester: testers[0] || '',
+            secondTester: testers[1] || '',
+            thirdTester: testers[2] || '',
+            cylinders: cylinders.length > 0 ? cylinders : [{
+              cylinderNo: '',
+              cylinderSpec: '',
+              wc: '',
+              extExam: 'PASS' as const,
+              intExam: 'PASS' as const,
+              barcode: '',
+              remarks: '',
+              recordedBy: '',
+            }],
+          }
+
+          form.reset(formData)
+          // Clear any saved data to prevent conflicts
+          localStorage.removeItem('newReportFormData')
           toast({
-            title: "Info",
-            description: "Duplicate functionality will be available soon",
+            title: "Duplicated",
+            description: "Report data has been copied. Please review and update as needed.",
           })
         } catch (error) {
           console.error('Error loading duplicate report:', error)
+          toast({
+            title: "Error",
+            description: "Failed to load duplicate report data",
+            variant: "destructive",
+          })
         }
-      } else {
-        // Load from localStorage
+      } else if (!isDuplicate) {
+        // Load from localStorage only if not duplicating
         const savedData = localStorage.getItem('newReportFormData')
         if (savedData) {
           try {
@@ -265,29 +328,48 @@ export default function NewReportPage() {
           }
         }
       }
+      
+      // Mark initial load as complete
       setIsInitialLoadComplete(true)
     }
 
-    loadInitialData()
-  }, []) // Only run once on mount
+    // Only load data when we have the necessary data (for duplicates) or immediately (for non-duplicates)
+    if (!isDuplicate || (isDuplicate && duplicateData && majorCustomers.length > 0)) {
+      loadInitialData()
+    }
+  }, [isDuplicate, duplicateData, majorCustomers.length, isInitialLoadComplete]) // Simplified dependencies
 
   // Watch form values for auto-save (only after initial load is complete)
   const watchedValues = form.watch()
   useEffect(() => {
-    if (isInitialLoadComplete) {
-      debouncedSave(watchedValues)
+    if (isInitialLoadComplete && !isDuplicate) {
+      // Only auto-save if it's not a duplicate (to avoid saving duplicate data)
+      const hasAnyData = Object.values(watchedValues).some(value => {
+        if (typeof value === 'string') return value.trim() !== ''
+        if (Array.isArray(value)) return value.length > 0
+        return value !== undefined && value !== null
+      })
+      
+      if (hasAnyData) {
+        debouncedSave(watchedValues)
+      }
     }
     return () => debouncedSave.cancel()
-  }, [watchedValues, debouncedSave, isInitialLoadComplete])
+  }, [watchedValues, debouncedSave, isInitialLoadComplete, isDuplicate])
 
   const onSubmit = async (values: ReportFormData) => {
     try {
+      // Find major customer name for display
+      const majorCustomerName = values.customerType === 'major' && values.majorCustomer
+        ? majorCustomers.find(c => c.id === values.majorCustomer)?.name || ''
+        : ''
+
       // Transform form data to match API requirements
       const reportData = {
         customer: values.customerType === 'major' 
           ? values.customerName 
-            ? `${values.majorCustomer} - ${values.customerName}`
-            : values.majorCustomer || ''
+            ? `${majorCustomerName} - ${values.customerName}`
+            : majorCustomerName
           : values.customerName || '',
         address: {
           street: values.address,
@@ -300,7 +382,7 @@ export default function NewReportPage() {
         size: values.size === 'Other' ? values.sizeOther! : values.size,
         test_date: values.test_date,
         tester_names: [values.primaryTester, values.secondTester, values.thirdTester]
-          .filter(name => name && name !== 'none'),
+          .filter((name): name is string => !!name && name !== 'none'),
         vehicle_id: values.vehicleId === 'Other' ? values.vehicleIdOther! : values.vehicleId,
         work_order: values.work_order,
         major_customer_id: values.customerType === 'major' ? values.majorCustomer : undefined,
@@ -314,22 +396,68 @@ export default function NewReportPage() {
   }
 
   const handleReset = () => {
-    form.reset()
-    localStorage.removeItem('newReportFormData')
+    // Temporarily disable auto-save during reset
+    debouncedSave.cancel()
     setIsInitialLoadComplete(false)
-    // Reset initial load flag after a brief delay to allow form reset to complete
-    setTimeout(() => setIsInitialLoadComplete(true), 100)
+    
+    // Reset form to default values
+    form.reset({
+      customerType: '',
+      majorCustomer: '',
+      customerName: '',
+      address: '',
+      suburb: '',
+      state: '',
+      postcode: '',
+      cylinder_gas_type: 'LPG',
+      gasTypeOther: '',
+      size: '',
+      sizeOther: '',
+      gas_supplier: '',
+      supplierOther: '',
+      test_date: new Date().toISOString().split('T')[0],
+      vehicleId: '',
+      vehicleIdOther: '',
+      work_order: '',
+      primaryTester: '',
+      secondTester: '',
+      thirdTester: '',
+      cylinders: [{
+        cylinderNo: '',
+        cylinderSpec: '',
+        wc: '',
+        extExam: 'PASS' as const,
+        intExam: 'PASS' as const,
+        barcode: '',
+        remarks: '',
+        recordedBy: '',
+      }],
+    })
+    
+    localStorage.removeItem('newReportFormData')
+    
+    // Re-enable auto-save after a brief delay
+    setTimeout(() => setIsInitialLoadComplete(true), 200)
+    
     toast({
       title: "Reset",
       description: "Form has been reset",
     })
   }
 
-  // Clear localStorage on first load to prevent any corrupted data issues
+  // Clear localStorage only if there's a duplicate parameter to prevent conflicts
   useEffect(() => {
-    // Remove any corrupted form data that might cause infinite loops
-    localStorage.removeItem('newReportFormData')
-  }, [])
+    if (isDuplicate) {
+      localStorage.removeItem('newReportFormData')
+    }
+  }, [isDuplicate])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSave.cancel()
+    }
+  }, [debouncedSave])
 
   const customerTypeValue = form.watch('customerType')
   const gasTypeValue = form.watch('cylinder_gas_type')
@@ -397,7 +525,7 @@ export default function NewReportPage() {
                         </FormControl>
                         <SelectContent>
                           {majorCustomers.map((customer) => (
-                            <SelectItem key={customer.id} value={customer.name}>
+                            <SelectItem key={customer.id} value={customer.id}>
                               {customer.name}
                             </SelectItem>
                           ))}
@@ -482,12 +610,12 @@ export default function NewReportPage() {
                             <SelectValue placeholder="Select state" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
-                          {stateOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
+                                                  <SelectContent>
+                            {(formDefaults?.stateOptions || []).map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -537,8 +665,11 @@ export default function NewReportPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="LPG">LPG</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
+                            {(formDefaults?.gasTypes || ['LPG', 'Other']).map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -580,7 +711,7 @@ export default function NewReportPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {sizeOptions.map((size) => (
+                            {(formDefaults?.cylinderSizes || []).map((size) => (
                               <SelectItem key={size} value={size}>
                                 {size}
                               </SelectItem>
@@ -626,7 +757,7 @@ export default function NewReportPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {supplierOptions.map((supplier) => (
+                            {(formDefaults?.gasSuppliers || []).map((supplier) => (
                               <SelectItem key={supplier} value={supplier}>
                                 {supplier}
                               </SelectItem>
@@ -696,7 +827,7 @@ export default function NewReportPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {vehicleOptions.map((id) => (
+                            {(formDefaults?.vehicleIds || []).map((id) => (
                               <SelectItem key={id} value={id}>
                                 {id}
                               </SelectItem>
