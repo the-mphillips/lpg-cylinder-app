@@ -262,3 +262,6 @@
   }
 }
 
+/* Import print styles for reports */
+@import '../styles/print.css';
+

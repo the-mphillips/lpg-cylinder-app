@@ -14,8 +14,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
-import { MoreVertical, Edit, Check, Download, Trash2, ArrowLeft, Archive, X } from 'lucide-react'
+import { MoreVertical, Edit, Check, Download, Trash2, ArrowLeft, Archive, X, FileText, Printer } from 'lucide-react'
 import { toast } from "sonner"
+import { ReportPDFModal } from '@/components/reports/ReportPDFModal'
+import { ReportData } from '@/components/reports/ReportPreview'
 
 interface CylinderData {
   cylinderNo: string
@@ -38,6 +40,7 @@ export default function ViewReportPage() {
   const [showUnapprovalModal, setShowUnapprovalModal] = useState(false)
   const [showArchiveModal, setShowArchiveModal] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [showPDFModal, setShowPDFModal] = useState(false)
   
   // Form state
   const [selectedSignatory, setSelectedSignatory] = useState('')
@@ -184,6 +187,49 @@ export default function ViewReportPage() {
     })
   }
 
+  // Transform report data for PDF component
+  const transformReportData = (): ReportData | null => {
+    if (!report) return null
+    
+    return {
+      id: report.id,
+      report_number: report.report_number?.toString() || '',
+      work_order: report.work_order || '',
+      customer: report.customer || '',
+      address: typeof report.address === 'object' && report.address ? {
+        street: report.address.street || '',
+        suburb: report.address.suburb || '',
+        state: report.address.state || '',
+        postcode: report.address.postcode || ''
+      } : {
+        street: '',
+        suburb: '',
+        state: '',
+        postcode: ''
+      },
+      cylinder_gas_type: report.gas_type || '',
+      gas_supplier: report.gas_supplier || '',
+      size: report.size || '',
+      test_date: report.test_date || '',
+      tester_names: Array.isArray(report.tester_names) ? report.tester_names : [],
+      vehicle_id: report.vehicle_id || '',
+      approved_signatory: report.approved_signatory,
+      approved_signatory_signature: report.approved_signatory_signature,
+      cylinder_data: (report.cylinder_data || []).map((cylinder: CylinderData) => ({
+        cylinderNo: cylinder.cylinderNo || '',
+        cylinderSpec: cylinder.cylinderSpec || '',
+        wc: cylinder.wc || '',
+        extExam: cylinder.extExam || '',
+        intExam: cylinder.intExam || '',
+        barcode: cylinder.barcode || '',
+        remarks: cylinder.remarks || '',
+        recordedBy: cylinder.recordedBy
+      })),
+      created_at: report.created_at || '',
+      status: report.status || ''
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="container mx-auto p-4">
@@ -239,6 +285,18 @@ export default function ViewReportPage() {
         </div>
         
         <div className="flex space-x-2">
+          {/* PDF Export Button */}
+          <Button onClick={() => setShowPDFModal(true)} className="gap-2">
+            <FileText className="h-4 w-4" />
+            Export PDF
+          </Button>
+
+          {/* Quick Print Button */}
+          <Button variant="outline" onClick={() => window.print()} className="gap-2">
+            <Printer className="h-4 w-4" />
+            Print
+          </Button>
+
           {/* Actions Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -617,6 +675,14 @@ export default function ViewReportPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* PDF Export Modal */}
+      <ReportPDFModal
+        open={showPDFModal}
+        onOpenChange={setShowPDFModal}
+        reportData={transformReportData()}
+        showEmailOption={true}
+      />
     </div>
   )
 }
