@@ -61,6 +61,10 @@ const reportSchema = z.object({
   primaryTester: z.string().min(1, "Required"),
   secondTester: z.string().optional(),
   thirdTester: z.string().optional(),
+  // Office-only fields
+  notes: z.string().optional(),
+  equipment_used: z.string().optional(),
+  images: z.array(z.string()).optional().default([]),
   cylinders: z.array(
     z.object({
       cylinderNo: z.string().min(1, "Required"),
@@ -72,7 +76,8 @@ const reportSchema = z.object({
       remarks: z.string().optional(),
       recordedBy: z.string().optional(),
     })
-  ).min(1, "At least one cylinder is required"),
+  ).min(1, "At least one cylinder is required")
+   .max(25, "Maximum of 25 cylinders allowed per report (fits on 1 A4 page)"),
 }).superRefine((data, ctx) => {
   // Conditional validation for "Other" fields
   if (data.customerType === 'major' && !data.majorCustomer) {
@@ -203,6 +208,10 @@ export default function EditReportPage() {
       primaryTester: '',
       secondTester: '',
       thirdTester: '',
+      // Office-only fields
+      notes: '',
+      equipment_used: '',
+      images: [],
       cylinders: [{
         cylinderNo: '',
         cylinderSpec: '',
@@ -347,6 +356,10 @@ export default function EditReportPage() {
         primaryTester: (testers[0] || '').toString(),
         secondTester: (testers[1] && testers[1].trim() !== '') ? testers[1].toString() : 'none',
         thirdTester: (testers[2] && testers[2].trim() !== '') ? testers[2].toString() : 'none',
+        // Office-only fields
+        notes: (report.notes || '').toString(),
+        equipment_used: (report.equipment_used || '').toString(),
+        images: Array.isArray(report.images) ? report.images : [],
         cylinders: formattedCylinders,
       })
     }
@@ -378,6 +391,12 @@ export default function EditReportPage() {
         work_order: values.work_order,
         major_customer_id: values.customerType === 'major' ? values.majorCustomer : undefined,
         cylinder_data: values.cylinders,
+        // Office-only fields
+        notes: values.notes,
+        equipment_used: values.equipment_used,
+        images: values.images,
+        // When using "Save Changes", convert draft to pending status
+        status: 'pending' as const,
       }
 
       await updateReportMutation.mutateAsync(reportData)
@@ -906,6 +925,119 @@ export default function EditReportPage() {
             </CardContent>
           </Card>
 
+          {/* Office Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Office Information</CardTitle>
+              <p className="text-sm text-muted-foreground">Internal notes and documentation (not included in printed reports)</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <textarea 
+                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="Internal notes, findings, or additional information..."
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="equipment_used"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Equipment Used</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Equipment or tools used during testing"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="images"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Images</FormLabel>
+                    <FormControl>
+                      <div className="space-y-2">
+                        <div className="text-sm text-muted-foreground">
+                          Upload photos of findings or conditions (for office reference only)
+                        </div>
+                        <Input 
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const files = Array.from(e.target.files || [])
+                            if (files.length === 0) return
+
+                            try {
+                              const formData = new FormData()
+                              files.forEach(file => formData.append('images', file))
+
+                              const response = await fetch('/api/upload/images', {
+                                method: 'POST',
+                                body: formData
+                              })
+
+                              if (!response.ok) {
+                                throw new Error('Upload failed')
+                              }
+
+                              const result = await response.json()
+                              
+                              if (result.success) {
+                                // Store the file paths for database storage
+                                const filePaths = result.uploadedFiles.map((file: { filePath: string }) => file.filePath)
+                                field.onChange([...(field.value || []), ...filePaths])
+                                
+                                toast.success("Images uploaded", {
+                                  description: `${result.uploadedFiles.length} images uploaded successfully`
+                                })
+                                
+                                if (result.errors) {
+                                  toast.error("Some uploads failed", {
+                                    description: result.errors.join(', ')
+                                  })
+                                }
+                              }
+                            } catch (error) {
+                              console.error('Upload error:', error)
+                              toast.error("Upload failed", {
+                                description: "Failed to upload images. Please try again."
+                              })
+                            }
+                          }}
+                        />
+                        {field.value && field.value.length > 0 && (
+                          <div className="text-sm text-muted-foreground">
+                            {field.value.length} file(s) selected: {field.value.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
           {/* Cylinder Data */}
           <Card>
             <CardHeader>
@@ -917,7 +1049,7 @@ export default function EditReportPage() {
           </Card>
 
           {/* Action Buttons */}
-          <div className="flex justify-between space-x-2">
+          <div className="flex justify-between items-center">
             <Button
               type="button"
               variant="outline"
@@ -928,14 +1060,32 @@ export default function EditReportPage() {
               Preview
             </Button>
 
-            <Button
-              type="submit"
-              disabled={updateReportMutation.status === 'pending'}
-              className="gap-2"
-            >
-              <Save className="h-4 w-4" />
-              {updateReportMutation.status === 'pending' ? 'Saving...' : 'Save Changes'}
-            </Button>
+            <div className="flex space-x-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  updateReportMutation.mutate({
+                    id: reportId,
+                    status: 'draft' as const,
+                  })
+                }}
+                disabled={updateReportMutation.status === 'pending'}
+                className="gap-2"
+              >
+                <Save className="h-4 w-4" />
+                Save as Draft
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={updateReportMutation.status === 'pending'}
+                className="gap-2"
+              >
+                <Save className="h-4 w-4" />
+                {updateReportMutation.status === 'pending' ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
           </div>
         </form>
       </Form>

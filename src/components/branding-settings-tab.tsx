@@ -11,6 +11,17 @@ import { toast } from 'sonner'
 
 const defaultAddress = { street: '', city: '', state: '', postcode: '', country: '' }
 const defaultContact = { phone: '', email: '', website: '' }
+const defaultReportSettings = { 
+  test_station_number: '871', 
+  test_station_text: 'SAI GLOBAL APPROVED TEST STATION NO. 871',
+  company_abn: '',
+  company_phone: '',
+  company_email: '',
+  company_address_line1: '',
+  company_address_line2: '',
+  logo_url: '',
+  mark_url: ''
+}
 
 export function BrandingSettingsTab() {
   const [companyInfo, setCompanyInfo] = useState({
@@ -28,11 +39,16 @@ export function BrandingSettingsTab() {
     favicon_url: ''
   })
   const [isEditingCompany, setIsEditingCompany] = useState(false)
+  const [reportSettings, setReportSettings] = useState(defaultReportSettings)
+  const [originalReportSettings, setOriginalReportSettings] = useState(defaultReportSettings)
+  const [isEditingReports, setIsEditingReports] = useState(false)
 
   // File input refs
   const logoLightRef = useRef<HTMLInputElement>(null)
   const logoDarkRef = useRef<HTMLInputElement>(null)
   const faviconRef = useRef<HTMLInputElement>(null)
+  const reportLogoRef = useRef<HTMLInputElement>(null)
+  const reportMarkRef = useRef<HTMLInputElement>(null)
 
   // Mutations
   const { mutateAsync: updateBrandingSetting } = api.admin.updateAppSetting.useMutation()
@@ -77,6 +93,22 @@ export function BrandingSettingsTab() {
       setCompanyInfo(newCompanyInfo)
       setOriginalCompanyInfo(newCompanyInfo)
       setVisualSettings(newVisualSettings)
+      
+      // Load report settings
+      const newReportSettings = {
+        test_station_number: safeStringValue(brandingSettings.test_station_number) || '871',
+        test_station_text: safeStringValue(brandingSettings.test_station_text) || 'SAI GLOBAL APPROVED TEST STATION NO. 871',
+        company_abn: safeStringValue(brandingSettings.company_abn),
+        company_phone: safeStringValue(brandingSettings.company_phone),
+        company_email: safeStringValue(brandingSettings.company_email),
+        company_address_line1: safeStringValue(brandingSettings.company_address_line1),
+        company_address_line2: safeStringValue(brandingSettings.company_address_line2),
+        logo_url: safeStringValue(brandingSettings.logo_url),
+        mark_url: safeStringValue(brandingSettings.mark_url)
+      }
+      
+      setReportSettings(newReportSettings)
+      setOriginalReportSettings(newReportSettings)
     }
   }, [brandingSettings])
 
@@ -136,6 +168,122 @@ export function BrandingSettingsTab() {
   const handleCancelCompanyEdit = () => {
     setCompanyInfo(originalCompanyInfo)
     setIsEditingCompany(false)
+  }
+
+  // Save only changed report settings
+  const handleSaveReportSettings = async () => {
+    try {
+      const updates: Promise<unknown>[] = []
+      
+      // Only update fields that have actually changed
+      Object.keys(reportSettings).forEach((key) => {
+        const typedKey = key as keyof typeof reportSettings
+        if (reportSettings[typedKey] !== originalReportSettings[typedKey]) {
+          updates.push(updateBrandingSetting({
+            category: 'reports',
+            key: typedKey,
+            value: JSON.stringify(reportSettings[typedKey])
+          }))
+        }
+      })
+      
+      if (updates.length > 0) {
+        await Promise.all(updates)
+        toast.success('Report settings updated successfully')
+        setOriginalReportSettings(reportSettings)
+        refetch()
+      } else {
+        toast.info('No changes to save')
+      }
+      
+      setIsEditingReports(false)
+    } catch (error) {
+      toast.error(`Failed to update report settings: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  const handleCancelReportEdit = () => {
+    setReportSettings(originalReportSettings)
+    setIsEditingReports(false)
+  }
+
+  // Report file upload
+  const handleReportFileUpload = async (file: File, settingKey: 'logo_url' | 'mark_url') => {
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', 'branding')
+      formData.append('subType', settingKey === 'logo_url' ? 'report-logo' : 'report-mark')
+
+      const supabase = (await import('@/lib/supabase/client')).createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` })
+        },
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setReportSettings(prev => ({ 
+          ...prev, 
+          [settingKey]: result.url 
+        }))
+        
+        toast.success(`Report ${settingKey === 'logo_url' ? 'logo' : 'mark'} uploaded successfully`)
+        refetch()
+      } else {
+        toast.error(`Failed to upload: ${result.error}`)
+      }
+    } catch (error) {
+      toast.error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  const handleReportFileSelect = (settingKey: 'logo_url' | 'mark_url') => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      handleReportFileUpload(file, settingKey)
+    }
+  }
+
+  const handleReportFileDelete = async (fileUrl: string, settingKey: 'logo_url' | 'mark_url') => {
+    const fileType = settingKey === 'logo_url' ? 'report logo' : 'report mark'
+    
+    const confirmed = window.confirm(`Are you sure you want to delete the ${fileType}? This action cannot be undone.`)
+    if (!confirmed) return
+
+    try {
+      const supabase = (await import('@/lib/supabase/client')).createClient()
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      const response = await fetch('/api/upload', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token && { 'Authorization': `Bearer ${session.access_token}` })
+        },
+        body: JSON.stringify({ fileUrl }),
+      })
+
+      if (response.ok) {
+        setReportSettings(prev => ({ 
+          ...prev, 
+          [settingKey]: '' 
+        }))
+        
+        toast.success(`${fileType} deleted successfully`)
+        refetch()
+      } else {
+        toast.error(`Failed to delete ${fileType}: ${response.statusText}`)
+      }
+    } catch (error) {
+      toast.error(`Delete failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   // Immediate color update
@@ -271,6 +419,20 @@ export function BrandingSettingsTab() {
         type="file"
         accept="image/*"
         onChange={handleFileSelect('favicon_url')}
+        className="hidden"
+      />
+      <input
+        ref={reportLogoRef}
+        type="file"
+        accept="image/*"
+        onChange={handleReportFileSelect('logo_url')}
+        className="hidden"
+      />
+      <input
+        ref={reportMarkRef}
+        type="file"
+        accept="image/*"
+        onChange={handleReportFileSelect('mark_url')}
         className="hidden"
       />
 
@@ -645,6 +807,209 @@ export function BrandingSettingsTab() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Report Configuration */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Report Configuration</CardTitle>
+            <div className="flex gap-2">
+              {isEditingReports ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={handleCancelReportEdit}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleSaveReportSettings}>Save</Button>
+                </>
+              ) : (
+                <Button size="sm" onClick={() => setIsEditingReports(true)}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Edit
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Test Station Configuration */}
+          <div className="space-y-4">
+            <h4 className="font-medium">Test Station</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="test_station_number">Station Number</Label>
+                <Input
+                  id="test_station_number"
+                  value={reportSettings.test_station_number}
+                  onChange={(e) => setReportSettings(prev => ({ ...prev, test_station_number: e.target.value }))}
+                  disabled={!isEditingReports}
+                  placeholder="871"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="test_station_text">Station Description</Label>
+                <Input
+                  id="test_station_text"
+                  value={reportSettings.test_station_text}
+                  onChange={(e) => setReportSettings(prev => ({ ...prev, test_station_text: e.target.value }))}
+                  disabled={!isEditingReports}
+                  placeholder="SAI GLOBAL APPROVED TEST STATION NO. 871"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Company Information for Reports */}
+          <div className="space-y-4">
+            <h4 className="font-medium">Company Information</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="company_abn">ABN</Label>
+                <Input
+                  id="company_abn"
+                  value={reportSettings.company_abn}
+                  onChange={(e) => setReportSettings(prev => ({ ...prev, company_abn: e.target.value }))}
+                  disabled={!isEditingReports}
+                  placeholder="64 246 540 757"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="company_phone">Phone</Label>
+                <Input
+                  id="company_phone"
+                  value={reportSettings.company_phone}
+                  onChange={(e) => setReportSettings(prev => ({ ...prev, company_phone: e.target.value }))}
+                  disabled={!isEditingReports}
+                  placeholder="1300 292 427"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="company_email">Email</Label>
+                <Input
+                  id="company_email"
+                  value={reportSettings.company_email}
+                  onChange={(e) => setReportSettings(prev => ({ ...prev, company_email: e.target.value }))}
+                  disabled={!isEditingReports}
+                  placeholder="accounts@bwavic.com.au"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="company_address_line1">Address Line 1</Label>
+                <Input
+                  id="company_address_line1"
+                  value={reportSettings.company_address_line1}
+                  onChange={(e) => setReportSettings(prev => ({ ...prev, company_address_line1: e.target.value }))}
+                  disabled={!isEditingReports}
+                  placeholder="PO BOX 210"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="company_address_line2">Address Line 2</Label>
+                <Input
+                  id="company_address_line2"
+                  value={reportSettings.company_address_line2}
+                  onChange={(e) => setReportSettings(prev => ({ ...prev, company_address_line2: e.target.value }))}
+                  disabled={!isEditingReports}
+                  placeholder="BUNYIP VIC 3815"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Visual Assets for Reports */}
+          <div className="space-y-4">
+            <h4 className="font-medium">Report Assets</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Report Logo */}
+              <div className="space-y-3">
+                <Label>Report Logo</Label>
+                <div className="relative group">
+                  {reportSettings.logo_url ? (
+                    <div className="relative border rounded-lg p-4 bg-white">
+                      <img
+                        src={reportSettings.logo_url}
+                        alt="Report logo"
+                        className="h-16 w-auto mx-auto object-contain"
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-lg">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => reportLogoRef.current?.click()}
+                        >
+                          <Upload className="w-4 h-4 mr-1" />
+                          Replace
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleReportFileDelete(reportSettings.logo_url, 'logo_url')}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full h-24 border-dashed"
+                      onClick={() => reportLogoRef.current?.click()}
+                    >
+                      <Upload className="w-6 h-6 mr-2" />
+                      Upload Report Logo
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Report Mark */}
+              <div className="space-y-3">
+                <Label>Report Mark</Label>
+                <div className="relative group">
+                  {reportSettings.mark_url ? (
+                    <div className="relative border rounded-lg p-4 bg-white">
+                      <img
+                        src={reportSettings.mark_url}
+                        alt="Report mark"
+                        className="h-16 w-auto mx-auto object-contain"
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-lg">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => reportMarkRef.current?.click()}
+                        >
+                          <Upload className="w-4 h-4 mr-1" />
+                          Replace
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleReportFileDelete(reportSettings.mark_url, 'mark_url')}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full h-24 border-dashed"
+                      onClick={() => reportMarkRef.current?.click()}
+                    >
+                      <Upload className="w-6 h-6 mr-2" />
+                      Upload Report Mark
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 } 

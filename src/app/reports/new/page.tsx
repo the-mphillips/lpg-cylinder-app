@@ -42,8 +42,69 @@ import { api } from "@/lib/trpc/client"
 import { Save, RotateCcw, Eye } from "lucide-react"
 import { CylinderDataForm } from "../components/cylinder-data-form"
 
-// Comprehensive validation schema matching the old system
-const reportSchema = z.object({
+// Base schema with minimal validation for drafts
+const baseCylinderSchema = z.object({
+  cylinderNo: z.string().optional(),
+  cylinderSpec: z.string().optional(),
+  wc: z.string().optional(),
+  extExam: z.enum(["PASS", "FAIL"]).optional().default("PASS"),
+  intExam: z.enum(["PASS", "FAIL"]).optional().default("PASS"),
+  barcode: z.string().optional(),
+  remarks: z.string().optional(),
+  recordedBy: z.string().optional(),
+})
+
+const fullCylinderSchema = z.object({
+  cylinderNo: z.string().min(1, "Required"),
+  cylinderSpec: z.string().min(1, "Required"),
+  wc: z.string().min(1, "Required"),
+  extExam: z.enum(["PASS", "FAIL"], { errorMap: () => ({ message: "Must be PASS or FAIL" }) }),
+  intExam: z.enum(["PASS", "FAIL"], { errorMap: () => ({ message: "Must be PASS or FAIL" }) }),
+  barcode: z.string().min(1, "Required"),
+  remarks: z.string().optional(),
+  recordedBy: z.string().optional(),
+})
+
+// Draft schema with minimal validation
+const draftReportSchema = z.object({
+  customerType: z.string().optional(),
+  majorCustomer: z.string().optional(),
+  customerName: z.string().optional(),
+  address: z.string().optional(),
+  suburb: z.string().optional(),
+  state: z.string().optional(),
+  postcode: z.string().optional(),
+  cylinder_gas_type: z.string().optional(),
+  gasTypeOther: z.string().optional(),
+  size: z.string().optional(),
+  sizeOther: z.string().optional(),
+  gas_supplier: z.string().optional(),
+  supplierOther: z.string().optional(),
+  test_date: z.string().optional(),
+  vehicleId: z.string().optional(),
+  vehicleIdOther: z.string().optional(),
+  work_order: z.string().optional(),
+  primaryTester: z.string().optional(),
+  secondTester: z.string().optional(),
+  thirdTester: z.string().optional(),
+  // Office-only fields (not included in printed reports)
+  notes: z.string().optional(),
+  equipment_used: z.string().optional(),
+  images: z.array(z.string()).optional().default([]),
+  cylinders: z.array(baseCylinderSchema).optional().default([{
+    cylinderNo: '',
+    cylinderSpec: '',
+    wc: '',
+    extExam: 'PASS',
+    intExam: 'PASS',
+    barcode: '',
+    remarks: '',
+    recordedBy: '',
+  }]),
+})
+
+// Full validation schema for final submission
+const finalReportSchema = z.object({
   customerType: z.string().min(1, "Required"),
   majorCustomer: z.string().optional(),
   customerName: z.string().min(1, "Required"),
@@ -64,56 +125,16 @@ const reportSchema = z.object({
   primaryTester: z.string().min(1, "Required"),
   secondTester: z.string().optional(),
   thirdTester: z.string().optional(),
-  cylinders: z.array(
-    z.object({
-      cylinderNo: z.string().min(1, "Required"),
-      cylinderSpec: z.string().min(1, "Required"),
-      wc: z.string().min(1, "Required"),
-      extExam: z.enum(["PASS", "FAIL"], { errorMap: () => ({ message: "Must be PASS or FAIL" }) }),
-      intExam: z.enum(["PASS", "FAIL"], { errorMap: () => ({ message: "Must be PASS or FAIL" }) }),
-      barcode: z.string().min(1, "Required"),
-      remarks: z.string().optional(),
-      recordedBy: z.string().optional(),
-    })
-  ).min(1, "At least one cylinder is required"),
-}).superRefine((data, ctx) => {
-  // Conditional validation for "Other" fields
-  if (data.customerType === 'major' && !data.majorCustomer) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Required for major customers",
-      path: ["majorCustomer"],
-    })
-  }
-  if (data.cylinder_gas_type === 'Other' && !data.gasTypeOther) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Please specify the gas type",
-      path: ["gasTypeOther"],
-    })
-  }
-  if (data.size === 'Other' && !data.sizeOther) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Please specify the size",
-      path: ["sizeOther"],
-    })
-  }
-  if (data.gas_supplier === 'Other' && !data.supplierOther) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Please specify the supplier",
-      path: ["supplierOther"],
-    })
-  }
-  if (data.vehicleId === 'Other' && !data.vehicleIdOther) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Please specify the vehicle ID",
-      path: ["vehicleIdOther"],
-    })
-  }
+  // Office-only fields (not included in printed reports)
+  notes: z.string().optional(),
+  equipment_used: z.string().optional(),
+  images: z.array(z.string()).optional().default([]),
+  cylinders: z.array(fullCylinderSchema).min(1, "At least one cylinder is required")
+   .max(25, "Maximum of 25 cylinders allowed per report (fits on 1 A4 page)"),
 })
+
+// Dynamic schema based on whether it's a draft or final submission
+const reportSchema = draftReportSchema // Default to draft validation
 
 type ReportFormData = z.infer<typeof reportSchema>
 
@@ -197,6 +218,10 @@ export default function NewReportPage() {
       primaryTester: '',
       secondTester: '',
       thirdTester: '',
+      // Office-only fields
+      notes: '',
+      equipment_used: '',
+      images: [],
       cylinders: [{
         cylinderNo: '',
         cylinderSpec: '',
@@ -284,6 +309,10 @@ export default function NewReportPage() {
             primaryTester: testers[0] || '',
             secondTester: testers[1] || '',
             thirdTester: testers[2] || '',
+            // Office-only fields (start fresh for duplicates)
+            notes: '',
+            equipment_used: '',
+            images: [],
             cylinders: cylinders.length > 0 ? cylinders : [{
               cylinderNo: '',
               cylinderSpec: '',
@@ -357,42 +386,77 @@ export default function NewReportPage() {
     return () => debouncedSave.cancel()
   }, [watchedValues, debouncedSave, isInitialLoadComplete, isDuplicate])
 
-  const onSubmit = async (values: ReportFormData) => {
+  const submitReport = async (values: ReportFormData, isDraft = false) => {
     try {
+      // Validate for final submission if not a draft
+      if (!isDraft) {
+        const validationResult = finalReportSchema.safeParse(values)
+        if (!validationResult.success) {
+          toast({
+            title: "Validation Error",
+            description: "Please fill in all required fields before submitting.",
+            variant: "destructive",
+          })
+          return
+        }
+      }
+
       // Find major customer name for display
       const majorCustomerName = values.customerType === 'major' && values.majorCustomer
         ? majorCustomers.find(c => c.id === values.majorCustomer)?.name || ''
         : ''
 
       // Transform form data to match API requirements
-      const reportData = {
+      const baseData = {
         customer: values.customerType === 'major' 
           ? values.customerName 
             ? `${majorCustomerName} - ${values.customerName}`
             : majorCustomerName
           : values.customerName || '',
         address: {
-          street: values.address,
-          suburb: values.suburb,
-          state: values.state,
-          postcode: values.postcode,
+          street: values.address || '',
+          suburb: values.suburb || '',
+          state: values.state || '',
+          postcode: values.postcode || '',
         },
-        gas_type: values.cylinder_gas_type === 'Other' ? values.gasTypeOther! : values.cylinder_gas_type,
-        gas_supplier: values.gas_supplier === 'Other' ? values.supplierOther! : values.gas_supplier,
-        size: values.size === 'Other' ? values.sizeOther! : values.size,
-        test_date: values.test_date,
+        gas_type: values.cylinder_gas_type === 'Other' ? values.gasTypeOther || '' : values.cylinder_gas_type || '',
+        gas_supplier: values.gas_supplier === 'Other' ? values.supplierOther : values.gas_supplier,
+        size: values.size === 'Other' ? values.sizeOther || '' : values.size || '',
+        test_date: values.test_date || '',
         tester_names: [values.primaryTester, values.secondTester, values.thirdTester]
           .filter((name): name is string => !!name && name !== 'none'),
-        vehicle_id: values.vehicleId === 'Other' ? values.vehicleIdOther! : values.vehicleId,
+        vehicle_id: values.vehicleId === 'Other' ? values.vehicleIdOther || '' : values.vehicleId || '',
         work_order: values.work_order,
         major_customer_id: values.customerType === 'major' ? values.majorCustomer : undefined,
-        cylinder_data: values.cylinders,
+        cylinder_data: values.cylinders || [],
       }
 
+      const reportData = isDraft 
+        ? { ...baseData, status: 'draft' as const }
+        : { ...baseData, status: 'pending' as const }
+
       await createReportMutation.mutateAsync(reportData)
+      
+      toast({
+        title: "Success",
+        description: isDraft ? "Report saved as draft" : "Report submitted successfully",
+      })
     } catch (error) {
       console.error('Error submitting form:', error)
+      toast({
+        title: "Error",
+        description: `Failed to ${isDraft ? 'save draft' : 'submit report'}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
     }
+  }
+
+  const onSubmit = (values: ReportFormData) => {
+    submitReport(values, false)
+  }
+
+  const handleSaveAsDraft = () => {
+    submitReport(form.getValues(), true)
   }
 
   const handleReset = () => {
@@ -422,6 +486,10 @@ export default function NewReportPage() {
       primaryTester: '',
       secondTester: '',
       thirdTester: '',
+      // Office-only fields
+      notes: '',
+      equipment_used: '',
+      images: [],
       cylinders: [{
         cylinderNo: '',
         cylinderSpec: '',
@@ -959,6 +1027,124 @@ export default function NewReportPage() {
             </CardContent>
           </Card>
 
+          {/* Office Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Office Information</CardTitle>
+              <p className="text-sm text-muted-foreground">Internal notes and documentation (not included in printed reports)</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Notes</FormLabel>
+                    <FormControl>
+                      <textarea 
+                        className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        placeholder="Internal notes, findings, or additional information..."
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="equipment_used"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Equipment Used</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="Equipment or tools used during testing"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="images"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Images</FormLabel>
+                    <FormControl>
+                      <div className="space-y-2">
+                        <div className="text-sm text-muted-foreground">
+                          Upload photos of findings or conditions (for office reference only)
+                        </div>
+                        <Input 
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={async (e) => {
+                            const files = Array.from(e.target.files || [])
+                            if (files.length === 0) return
+
+                            try {
+                              const formData = new FormData()
+                              files.forEach(file => formData.append('images', file))
+
+                              const response = await fetch('/api/upload/images', {
+                                method: 'POST',
+                                body: formData
+                              })
+
+                              if (!response.ok) {
+                                throw new Error('Upload failed')
+                              }
+
+                              const result = await response.json()
+                              
+                              if (result.success) {
+                                // Store the file paths for database storage
+                                const filePaths = result.uploadedFiles.map((file: { filePath: string }) => file.filePath)
+                                field.onChange([...(field.value || []), ...filePaths])
+                                
+                                toast({
+                                  title: "Images uploaded",
+                                  description: `${result.uploadedFiles.length} images uploaded successfully`
+                                })
+                                
+                                if (result.errors) {
+                                  toast({
+                                    title: "Some uploads failed",
+                                    description: result.errors.join(', '),
+                                    variant: "destructive"
+                                  })
+                                }
+                              }
+                            } catch (error) {
+                              console.error('Upload error:', error)
+                              toast({
+                                title: "Upload failed",
+                                description: "Failed to upload images. Please try again.",
+                                variant: "destructive"
+                              })
+                            }
+                          }}
+                        />
+                        {field.value && field.value.length > 0 && (
+                          <div className="text-sm text-muted-foreground">
+                            {field.value.length} file(s) selected: {field.value.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+
           {/* Cylinder Data */}
           <Card>
             <CardHeader>
@@ -970,7 +1156,7 @@ export default function NewReportPage() {
           </Card>
 
           {/* Action Buttons */}
-          <div className="flex justify-between space-x-2">
+          <div className="flex justify-between items-center">
             <Button
               type="button"
               variant="outline"
@@ -981,27 +1167,40 @@ export default function NewReportPage() {
               Reset Form
             </Button>
             
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setPreviewData(form.getValues())
-                setIsPreviewOpen(true)
-              }}
-              className="gap-2"
-            >
-              <Eye className="h-4 w-4" />
-              Preview
-            </Button>
-            
-            <Button
-              type="submit"
-              disabled={createReportMutation.status === 'pending'}
-              className="gap-2"
-            >
-              <Save className="h-4 w-4" />
-              {createReportMutation.status === 'pending' ? 'Saving...' : 'Save Report'}
-            </Button>
+            <div className="flex space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setPreviewData(form.getValues())
+                  setIsPreviewOpen(true)
+                }}
+                className="gap-2"
+              >
+                <Eye className="h-4 w-4" />
+                Preview
+              </Button>
+              
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleSaveAsDraft}
+                disabled={createReportMutation.status === 'pending'}
+                className="gap-2"
+              >
+                <Save className="h-4 w-4" />
+                Save as Draft
+              </Button>
+              
+              <Button
+                type="submit"
+                disabled={createReportMutation.status === 'pending'}
+                className="gap-2"
+              >
+                <Save className="h-4 w-4" />
+                {createReportMutation.status === 'pending' ? 'Submitting...' : 'Submit Report'}
+              </Button>
+            </div>
           </div>
 
           {/* Preview Modal */}

@@ -31,7 +31,7 @@ export function ReportCylinderTable({ cylinderData, printMode = false }: ReportC
       {/* Table Headers */}
       <div className={cn(
         "grid grid-cols-[1fr_1fr_0.5fr_0.75fr_0.75fr_1fr_1.5fr] gap-0",
-        "bg-gray-200 font-bold text-[8px] text-center",
+        "bg-gray-200 font-bold text-[11px] text-center",
         "print:bg-gray-200"
       )}>
         <div className="border-r border-black p-1 py-2 flex items-center justify-center">
@@ -64,7 +64,7 @@ export function ReportCylinderTable({ cylinderData, printMode = false }: ReportC
             key={index}
             className={cn(
               "grid grid-cols-[1fr_1fr_0.5fr_0.75fr_0.75fr_1fr_1.5fr] gap-0",
-              "text-[8px] text-center",
+              "text-[10px] text-center",
               "border-t border-black",
               "print:break-inside-avoid"
             )}
@@ -108,34 +108,14 @@ export function ReportCylinderTable({ cylinderData, printMode = false }: ReportC
         ))
       ) : (
         <div className={cn(
-          "border-t border-black p-4 text-center text-[8px]",
+          "border-t border-black p-4 text-center text-[10px]",
           "col-span-7"
         )}>
           No cylinder data available.
         </div>
       )}
 
-      {/* Add empty rows for minimum table height if needed */}
-      {hasData && cylinderData.length < 10 && (
-        Array.from({ length: Math.max(0, 10 - cylinderData.length) }).map((_, index) => (
-          <div
-            key={`empty-${index}`}
-            className={cn(
-              "grid grid-cols-[1fr_1fr_0.5fr_0.75fr_0.75fr_1fr_1.5fr] gap-0",
-              "text-[8px] text-center",
-              "border-t border-black h-8"
-            )}
-          >
-            <div className="border-r border-black"></div>
-            <div className="border-r border-black"></div>
-            <div className="border-r border-black"></div>
-            <div className="border-r border-black"></div>
-            <div className="border-r border-black"></div>
-            <div className="border-r border-black"></div>
-            <div></div>
-          </div>
-        ))
-      )}
+
     </div>
   )
 } 

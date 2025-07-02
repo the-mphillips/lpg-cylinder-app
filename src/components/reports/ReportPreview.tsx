@@ -75,9 +75,9 @@ export function ReportPreview({ data, className, printMode = false }: ReportPrev
         ],
         // Typography
         "text-[10pt] leading-tight",
-        // Grid layout for proper spacing
-        "grid grid-rows-[auto_auto_1fr_auto]",
-        "gap-4",
+        // Flex layout for proper spacing
+        "flex flex-col",
+        "gap-1",
         className
       )}
       style={{
@@ -93,6 +93,9 @@ export function ReportPreview({ data, className, printMode = false }: ReportPrev
         printMode={printMode}
       />
 
+      {/* Spacing between header and customer details */}
+      <div className="h-2"></div>
+
       {/* Customer Information Section */}
       <ReportCustomerInfo
         customer={data.customer}
@@ -105,20 +108,32 @@ export function ReportPreview({ data, className, printMode = false }: ReportPrev
         printMode={printMode}
       />
 
+      {/* Spacing between customer details and certification */}
+      <div className="h-2"></div>
+
       {/* Certification Text */}
       <div className={cn(
-        "text-justify text-[8.6pt] font-bold",
-        "py-2 px-1",
-        "print:py-1"
-      )}>
+        "text-[9.6pt] font-bold leading-relaxed",
+        "py-1 px-1 mb-2",
+        "print:py-0.5 print:mb-1"
+      )}
+      style={{
+        textAlign: 'justify',
+        textJustify: 'inter-word',
+        textAlignLast: 'justify',
+        hyphens: 'auto'
+      }}>
         THIS IS TO CERTIFY that the following cylinders have been tested and inspected in 
-        accordance with the requirements of the SAI Global Gas Cylinder Code AS 2030 and the SAI 
-        Global Code for Gas Cylinder Test Station AS 2337. Those cylinders, which have passed the 
+        accordance with the requirements<br />of the SAI Global Gas Cylinder Code AS 2030 and the SAI 
+        Global Code for Gas Cylinder Test Station AS 2337.<br />Those cylinders, which have passed the 
         tests, have been stamped with the test station mark and date of test.
       </div>
 
-      {/* Cylinder Data Table - Takes remaining space */}
-      <div className="flex-1 min-h-0">
+      {/* Spacing between certification and cylinder table */}
+      <div className="h-1"></div>
+
+      {/* Cylinder Data Table */}
+      <div className="mb-3">
         <ReportCylinderTable
           cylinderData={data.cylinder_data}
           printMode={printMode}

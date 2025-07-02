@@ -4,7 +4,7 @@ import { isUsernameAvailable, isEmailAvailable, getUserDisplayName, createUser, 
 import { UserRole, getRolePermissions } from '@/lib/types/database'
 import { createClient } from '@/lib/supabase/client'
 import isEmail from 'validator/lib/isEmail'
-import { logAuthEvent } from '@/lib/utils/logging'
+import { logAuthEvent } from '@/lib/utils/unified-logging'
 
 export const authRouter = createTRPCRouter({
   getSession: publicProcedure.query(async ({ ctx }) => {
@@ -53,20 +53,35 @@ export const authRouter = createTRPCRouter({
 
       if (error) {
         // Log failed login attempt
-        await logAuthEvent('LOGIN', undefined, email, ctx.req, false)
+        await logAuthEvent('LOGIN', `Login failed for ${email}`, {
+          userId: undefined,
+          level: 'WARNING',
+          details: { email, failed_reason: error.message },
+          request: ctx.req
+        })
         // Provide a generic error to avoid leaking information.
         throw new Error('Invalid username or password');
       }
 
       // Log successful login
-      await logAuthEvent('LOGIN', data.user?.id, email, ctx.req, true)
+      await logAuthEvent('LOGIN', `Successful login for ${email}`, {
+        userId: data.user?.id,
+        level: 'INFO',
+        details: { email },
+        request: ctx.req
+      })
 
       return { success: true };
     }),
 
   logout: authedProcedure.mutation(async ({ ctx }) => {
     // Log logout attempt
-    await logAuthEvent('LOGOUT', ctx.user?.id, ctx.user?.email, ctx.req, true)
+    await logAuthEvent('LOGOUT', `User logout: ${ctx.user?.email}`, {
+      userId: ctx.user?.id,
+      level: 'INFO',
+      details: { email: ctx.user?.email },
+      request: ctx.req
+    })
     
     const { error } = await ctx.supabase.auth.signOut()
     if (error) {

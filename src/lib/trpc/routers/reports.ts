@@ -3,7 +3,43 @@ import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { logUserActivity } from '@/lib/utils/unified-logging'
 
-const reportSchema = z.object({
+// Base schema for required fields
+const baseReportSchema = z.object({
+  customer: z.string().optional(),
+  address: z.object({
+    street: z.string().optional(),
+    suburb: z.string().optional(),
+    state: z.string().optional(),
+    postcode: z.string().optional(),
+  }).optional(),
+  gas_type: z.string().optional(),
+  gas_supplier: z.string().optional(),
+  size: z.string().optional(),
+  test_date: z.string().optional(),
+  tester_names: z.array(z.string()).optional(),
+  vehicle_id: z.string().optional(),
+  work_order: z.string().optional(),
+  major_customer_id: z.string().optional(),
+  status: z.enum(['draft', 'pending']).optional().default('pending'),
+  // Office-only fields (not included in printed reports)
+  notes: z.string().optional(),
+  equipment_used: z.string().optional(),
+  images: z.array(z.string()).optional().default([]),
+  // cylinder_data will be an array of objects
+  cylinder_data: z.array(z.object({
+    cylinderNo: z.string().optional(),
+    cylinderSpec: z.string().optional(),
+    wc: z.string().optional(),
+    extExam: z.enum(['PASS', 'FAIL']).optional(),
+    intExam: z.enum(['PASS', 'FAIL']).optional(),
+    barcode: z.string().optional(),
+    remarks: z.string().optional(),
+    recordedBy: z.string().optional(),
+  })).optional(),
+})
+
+// Schema for final submission (all required fields)
+const finalReportSchema = z.object({
   customer: z.string().min(1, 'Customer name is required'),
   address: z.object({
     street: z.string().min(1, 'Address is required'),
@@ -19,6 +55,11 @@ const reportSchema = z.object({
   vehicle_id: z.string().min(1, 'Vehicle ID is required'),
   work_order: z.string().optional(),
   major_customer_id: z.string().optional(),
+  status: z.enum(['draft', 'pending']).optional().default('pending'),
+  // Office-only fields (not included in printed reports)
+  notes: z.string().optional(),
+  equipment_used: z.string().optional(),
+  images: z.array(z.string()).optional().default([]),
   // cylinder_data will be an array of objects
   cylinder_data: z.array(z.object({
     cylinderNo: z.string().min(1, 'Cylinder number is required'),
@@ -32,8 +73,24 @@ const reportSchema = z.object({
   })).min(1, 'At least one cylinder is required'),
 })
 
-const updateReportSchema = reportSchema.extend({
+// Dynamic schema that validates based on status
+const reportSchema = z.discriminatedUnion('status', [
+  // Draft schema - minimal validation
+  baseReportSchema.extend({
+    status: z.literal('draft'),
+  }),
+  // Final submission schema - full validation
+  finalReportSchema.extend({
+    status: z.literal('pending'),
+  }),
+]).or(
+  // Default to final schema if no status specified
+  finalReportSchema
+)
+
+const updateReportSchema = baseReportSchema.extend({
   id: z.string(),
+  status: z.enum(['draft', 'pending', 'approved', 'rejected']).optional(),
 }).partial().extend({
   id: z.string(), // id is always required for updates
 })
@@ -86,7 +143,7 @@ export const reportsRouter = createTRPCRouter({
             ...input,
             user_id: ctx.user.id,
             created_by: ctx.user.id,
-            status: 'pending',
+            status: input.status || 'pending', // Use provided status or default to 'pending'
             report_number: nextReportNumber,
           })
           .select()
@@ -153,7 +210,61 @@ export const reportsRouter = createTRPCRouter({
             message: `Report with id '${input.id}' not found.`,
           });
         }
-        return data;
+
+        // Get the signature for the approved signatory
+        let approved_signatory_signature = null;
+        if (data.approved_signatory) {
+          console.log(`[SIGNATURE DEBUG] Looking for signature for signatory: ${data.approved_signatory}`);
+          
+          try {
+            // Split the full name to search first and last names separately
+            const nameParts = data.approved_signatory.trim().split(' ');
+            const firstName = nameParts[0];
+            const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+            
+            console.log(`[SIGNATURE DEBUG] Searching for first_name: "${firstName}", last_name: "${lastName}"`);
+            
+            // Use service client to bypass RLS policies that might cause recursion
+            let query = ctx.supabaseService
+              .from('users')
+              .select('signature, first_name, last_name')
+              .eq('is_active', true);
+            
+            // Search for exact match on first name and last name
+            if (firstName) {
+              query = query.ilike('first_name', firstName);
+            }
+            if (lastName) {
+              query = query.ilike('last_name', lastName);
+            }
+            
+            const { data: signatoryUser, error: signatoryError } = await query.maybeSingle();
+            
+            if (signatoryError) {
+              console.error('[SIGNATURE DEBUG] Error fetching signatory:', signatoryError);
+            } else if (signatoryUser?.signature) {
+              approved_signatory_signature = signatoryUser.signature;
+              console.log(`[SIGNATURE DEBUG] Found signature: ${approved_signatory_signature}`);
+              console.log(`[SIGNATURE DEBUG] For user: ${signatoryUser.first_name} ${signatoryUser.last_name}`);
+            } else {
+              console.log(`[SIGNATURE DEBUG] No signature found for signatory: ${data.approved_signatory}`);
+              if (signatoryUser) {
+                console.log(`[SIGNATURE DEBUG] User found but no signature: ${signatoryUser.first_name} ${signatoryUser.last_name}`);
+              } else {
+                console.log(`[SIGNATURE DEBUG] No user found matching name pattern`);
+              }
+            }
+          } catch (sigError) {
+            console.error('[SIGNATURE DEBUG] Exception during signature fetch:', sigError);
+          }
+        } else {
+          console.log('[SIGNATURE DEBUG] No approved signatory set on report');
+        }
+
+        return {
+          ...data,
+          approved_signatory_signature
+        };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -579,6 +690,34 @@ export const reportsRouter = createTRPCRouter({
             code: 'UNAUTHORIZED',
             message: 'Invalid admin password.',
           });
+        }
+
+        // Delete associated images from storage before deleting the report
+        if (report?.images && Array.isArray(report.images) && report.images.length > 0) {
+          try {
+            console.log(`Deleting ${report.images.length} images for report ${report.report_number}`);
+            
+            const deletePromises = report.images.map(async (imagePath: string) => {
+              try {
+                const { error: deleteError } = await ctx.supabaseService.storage
+                  .from('app-data')
+                  .remove([imagePath]);
+                
+                if (deleteError) {
+                  console.error(`Failed to delete image ${imagePath}:`, deleteError);
+                } else {
+                  console.log(`Successfully deleted image: ${imagePath}`);
+                }
+              } catch (error) {
+                console.error(`Error deleting image ${imagePath}:`, error);
+              }
+            });
+
+            await Promise.allSettled(deletePromises);
+          } catch (error) {
+            console.error('Error during image cleanup:', error);
+            // Continue with report deletion even if image cleanup fails
+          }
         }
 
         const { error } = await ctx.supabase

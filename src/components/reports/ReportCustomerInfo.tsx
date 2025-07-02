@@ -26,57 +26,55 @@ export function ReportCustomerInfo({
 }: ReportCustomerInfoProps) {
   return (
     <div className={cn(
-      "w-full space-y-1",
-      printMode && "print:space-y-1"
+      "w-full space-y-1.5",
+      printMode && "print:space-y-1.5"
     )}>
       {/* Customer Name Row */}
-      <div className="grid grid-cols-[auto_1fr_auto] gap-4 items-center">
-        <div className="text-[14px] font-bold text-black">Customer:</div>
-        <div className="border-b border-gray-300 pb-0.5">
-          <span className="text-[14px] pl-3">{customer || ''}</span>
+      <div className="grid grid-cols-[80px_1fr_auto] gap-4 items-center">
+        <div className="text-[14px] font-bold text-black whitespace-nowrap leading-relaxed">Customer:</div>
+        <div>
+          <span className="text-[14px] leading-relaxed">{customer || ''}</span>
         </div>
-        <div className="text-[14px] font-bold text-black text-right">
+        <div className="text-[14px] font-bold text-black text-right whitespace-nowrap leading-tight">
           CYLINDER TEST REPORT
         </div>
       </div>
 
       {/* Address Row */}
-      <div className="grid grid-cols-[auto_1fr_auto] gap-4 items-center">
-        <div className="text-[14px] font-bold text-black">Address:</div>
-        <div className="border-b border-gray-300 pb-0.5">
-          <span className="text-[14px] pl-3">{address || ''}</span>
+      <div className="grid grid-cols-[80px_1fr_auto] gap-4 items-center">
+        <div className="text-[14px] font-bold text-black whitespace-nowrap leading-relaxed">Address:</div>
+        <div>
+          <span className="text-[14px] leading-relaxed">{address || ''}</span>
         </div>
-        <div className="text-[14px] font-bold text-red-600 text-right">
+        <div className="text-[14px] font-bold text-red-600 text-right leading-tight">
           {reportNumber || ''}
         </div>
       </div>
 
       {/* Gas Details Row */}
-      <div className="grid grid-cols-[auto_auto_auto_auto_auto_auto_auto] gap-2 items-center">
-        <div className="text-[14px] font-bold text-black">Type:</div>
-        <div className="border-b border-gray-300 pb-0.5 min-w-[60px]">
-          <span className="text-[14px] pl-3">{gasType || ''}</span>
+      <div className="grid grid-cols-[80px_1fr_auto] gap-4 items-center">
+        <div className="text-[14px] font-bold text-black whitespace-nowrap leading-relaxed">Type:</div>
+        <div className="flex gap-4 text-[14px] leading-relaxed">
+          <span>{gasType || ''}</span>
+          <div className="flex gap-2">
+            <span className="font-bold text-black whitespace-nowrap">Gas Supplier:</span>
+            <span>{gasSupplier || ''}</span>
+          </div>
+          <div className="flex gap-2">
+            <span className="font-bold text-black whitespace-nowrap">Size:</span>
+            <span>{size || ''}</span>
+          </div>
         </div>
-        
-        <div className="text-[14px] font-bold text-black">Gas Supplier:</div>
-        <div className="border-b border-gray-300 pb-0.5 min-w-[80px]">
-          <span className="text-[14px] pl-3">{gasSupplier || ''}</span>
-        </div>
-        
-        <div className="text-[14px] font-bold text-black">Size:</div>
-        <div className="border-b border-gray-300 pb-0.5 min-w-[60px]">
-          <span className="text-[14px] pl-3">{size || ''}</span>
-        </div>
-        
-        <div className="text-[14px] font-bold text-black text-right">
+        <div className="text-[14px] font-bold text-black text-right whitespace-nowrap leading-tight">
           WORK ORDER
         </div>
       </div>
 
       {/* Work Order Row */}
-      <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
+      <div className="grid grid-cols-[80px_1fr_auto] gap-4 items-center">
         <div></div>
-        <div className="text-[14px] font-bold text-red-600 text-right">
+        <div></div>
+        <div className="text-[14px] font-bold text-red-600 text-right leading-tight">
           {workOrder || ''}
         </div>
       </div>

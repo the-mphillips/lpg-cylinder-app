@@ -432,7 +432,7 @@ export async function getAuditLogs(options: {
     const supabase = getServiceClient()
     
     let query = supabase
-      .from('audit_logs_with_users') // Use the view that includes user data
+      .from('audit_logs') // Use the actual table instead of non-existent view
       .select('*')
       .order('created_at', { ascending: false })
     

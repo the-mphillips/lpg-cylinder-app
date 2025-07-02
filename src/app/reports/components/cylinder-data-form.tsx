@@ -22,6 +22,8 @@ import { Trash2, Plus, Check, X } from "lucide-react"
 import { api } from "@/lib/trpc/client"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { MAX_CYLINDERS_PER_REPORT } from "@/lib/validations/reports"
 
 interface PassFailButtonsProps {
   value: string
@@ -138,6 +140,9 @@ export function CylinderDataForm() {
   const { data: testers = [] } = api.reports.getTesters.useQuery()
 
   const addCylinder = () => {
+    if (fields.length >= MAX_CYLINDERS_PER_REPORT) {
+      return
+    }
     append({
       cylinderNo: '',
       cylinderSpec: '',
@@ -321,15 +326,30 @@ export function CylinderDataForm() {
         </Card>
       ))}
       
-      <Button
-        type="button"
-        variant="outline"
-        onClick={addCylinder}
-        className="w-full gap-2"
-      >
-        <Plus className="h-4 w-4" />
-        Add Another Cylinder
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="w-full">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addCylinder}
+                disabled={fields.length >= MAX_CYLINDERS_PER_REPORT}
+                className="w-full gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                Add Another Cylinder
+                {fields.length >= MAX_CYLINDERS_PER_REPORT && ` (${fields.length}/${MAX_CYLINDERS_PER_REPORT})`}
+              </Button>
+            </div>
+          </TooltipTrigger>
+          {fields.length >= MAX_CYLINDERS_PER_REPORT && (
+            <TooltipContent>
+              <p>Maximum of {MAX_CYLINDERS_PER_REPORT} cylinders allowed per report (fits perfectly on 1 A4 page)</p>
+            </TooltipContent>
+          )}
+        </Tooltip>
+      </TooltipProvider>
     </div>
   )
 }

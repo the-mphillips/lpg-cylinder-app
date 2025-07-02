@@ -333,15 +333,28 @@ async function saveBrandingSetting(subType: string, publicUrl: string) {
   try {
     const supabase = getServiceClient()
     
-    // Map subType to app_settings key
-    const keyMap: Record<string, string> = {
+    // Map subType to app_settings key and category
+    const brandingKeyMap: Record<string, string> = {
       'logo': 'logo_light_url',
       'logo-dark': 'logo_dark_url',
       'favicon': 'favicon_url'
     }
     
-    const settingKey = keyMap[subType]
-    if (!settingKey) {
+    const reportsKeyMap: Record<string, string> = {
+      'report-logo': 'logo_url',
+      'report-mark': 'mark_url'
+    }
+    
+    let settingKey: string
+    let category: string
+    
+    if (brandingKeyMap[subType]) {
+      settingKey = brandingKeyMap[subType]
+      category = 'branding'
+    } else if (reportsKeyMap[subType]) {
+      settingKey = reportsKeyMap[subType]
+      category = 'reports'
+    } else {
       console.warn(`Unknown branding subType: ${subType}`)
       return
     }
@@ -350,7 +363,7 @@ async function saveBrandingSetting(subType: string, publicUrl: string) {
     const { error } = await supabase
       .from('app_settings')
       .upsert({
-        category: 'branding',
+        category: category,
         key: settingKey,
         value: JSON.stringify(publicUrl),
         updated_at: new Date().toISOString()
@@ -361,7 +374,7 @@ async function saveBrandingSetting(subType: string, publicUrl: string) {
     if (error) {
       console.error('Failed to save branding setting:', error)
     } else {
-      console.log(`✅ Updated app setting: branding.${settingKey} -> ${publicUrl}`)
+      console.log(`✅ Updated app setting: ${category}.${settingKey} -> ${publicUrl}`)
     }
   } catch (error) {
     console.error('Failed to save branding setting:', error)
@@ -373,15 +386,28 @@ async function clearBrandingSetting(subType: string) {
   try {
     const supabase = getServiceClient()
     
-    // Map subType to app_settings key
-    const keyMap: Record<string, string> = {
+    // Map subType to app_settings key and category
+    const brandingKeyMap: Record<string, string> = {
       'logo': 'logo_light_url',
       'logo-dark': 'logo_dark_url',
       'favicon': 'favicon_url'
     }
     
-    const settingKey = keyMap[subType]
-    if (!settingKey) {
+    const reportsKeyMap: Record<string, string> = {
+      'report-logo': 'logo_url',
+      'report-mark': 'mark_url'
+    }
+    
+    let settingKey: string
+    let category: string
+    
+    if (brandingKeyMap[subType]) {
+      settingKey = brandingKeyMap[subType]
+      category = 'branding'
+    } else if (reportsKeyMap[subType]) {
+      settingKey = reportsKeyMap[subType]
+      category = 'reports'
+    } else {
       console.warn(`Unknown branding subType: ${subType}`)
       return
     }
@@ -390,7 +416,7 @@ async function clearBrandingSetting(subType: string) {
     const { error } = await supabase
       .from('app_settings')
       .upsert({
-        category: 'branding',
+        category: category,
         key: settingKey,
         value: JSON.stringify(''),
         updated_at: new Date().toISOString()
@@ -401,7 +427,7 @@ async function clearBrandingSetting(subType: string) {
     if (error) {
       console.error('Failed to clear branding setting:', error)
     } else {
-      console.log(`✅ Cleared app setting: branding.${settingKey}`)
+      console.log(`✅ Cleared app setting: ${category}.${settingKey}`)
     }
   } catch (error) {
     console.error('Failed to clear branding setting:', error)

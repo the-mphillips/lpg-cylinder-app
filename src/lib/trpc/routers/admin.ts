@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { authedProcedure, adminProcedure, createTRPCRouter } from '../server'
 import { TRPCError } from '@trpc/server'
-import { logSettingsUpdate } from '@/lib/utils/logging'
+import { logSettingsUpdate } from '@/lib/utils/unified-logging'
 
 // Helper function to get descriptions for email settings
 function getEmailSettingDescription(key: string): string {
@@ -599,7 +599,7 @@ export const adminRouter = createTRPCRouter({
     const { data, error } = await ctx.supabaseService
       .from('app_settings')
       .select('*')
-      .eq('category', 'branding')
+      .in('category', ['branding', 'reports']) // Include both branding and reports categories
 
     if (error) {
       throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })

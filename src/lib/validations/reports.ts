@@ -61,6 +61,26 @@ export const cylinderDataSchema = z.object({
   notes: z.string().optional(),
 })
 
+// Modern cylinder data schema for unified report form
+export const modernCylinderDataSchema = z.object({
+  cylinderNo: z.string().min(1, 'Cylinder number is required'),
+  cylinderSpec: z.string().min(1, 'Cylinder specification is required'),
+  wc: z.string().min(1, 'Water capacity is required'),
+  extExam: z.enum(['PASS', 'FAIL'], { errorMap: () => ({ message: 'Must be PASS or FAIL' }) }),
+  intExam: z.enum(['PASS', 'FAIL'], { errorMap: () => ({ message: 'Must be PASS or FAIL' }) }),
+  barcode: z.string().min(1, 'Barcode is required'),
+  remarks: z.string().optional(),
+  recordedBy: z.string().optional(),
+})
+
+// Maximum cylinders constant for reuse across the app
+export const MAX_CYLINDERS_PER_REPORT = 25
+
+// Array schema for cylinders with max limit
+export const cylindersArraySchema = z.array(modernCylinderDataSchema)
+  .min(1, 'At least one cylinder is required')
+  .max(MAX_CYLINDERS_PER_REPORT, `Maximum of ${MAX_CYLINDERS_PER_REPORT} cylinders allowed per report (fits on 1 A4 page)`)
+
 export const majorCustomerSchema = z.object({
   name: z.string().min(1, 'Customer name is required'),
 })

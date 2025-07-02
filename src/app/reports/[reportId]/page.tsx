@@ -274,9 +274,9 @@ export default function ViewReportPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-4">
-          <Button variant="outline" onClick={() => router.back()}>
+          <Button variant="outline" onClick={() => router.push('/reports')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back
+            Back to Reports
           </Button>
           <h1 className="text-2xl font-bold">Report #{report.report_number}</h1>
           <Badge className={getStatusColor(report.status)}>
@@ -454,6 +454,51 @@ export default function ViewReportPage() {
               ))}
             </TableBody>
           </Table>
+        </CardContent>
+      </Card>
+
+      {/* Office Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Office Information</CardTitle>
+          <p className="text-sm text-muted-foreground">Internal documentation (not included in printed reports)</p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <InfoItem 
+            label="Notes" 
+            value={report.notes && typeof report.notes === 'string' && report.notes.trim() ? (
+              <div className="whitespace-pre-wrap">{report.notes}</div>
+            ) : (
+              <span className="text-gray-500 italic">No notes</span>
+            )} 
+          />
+          <InfoItem 
+            label="Equipment Used" 
+            value={report.equipment_used && typeof report.equipment_used === 'string' && report.equipment_used.trim() ? (
+              report.equipment_used
+            ) : (
+              <span className="text-gray-500 italic">Not specified</span>
+            )} 
+          />
+          <InfoItem 
+            label="Images" 
+            value={Array.isArray(report.images) && report.images.length > 0 ? (
+              <div className="space-y-2">
+                <span className="text-sm text-muted-foreground">
+                  {report.images.length} image(s) attached
+                </span>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {report.images.map((imageName: string, index: number) => (
+                    <div key={index} className="text-sm bg-muted px-2 py-1 rounded truncate">
+                      {imageName}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <span className="text-gray-500 italic">No images</span>
+            )} 
+          />
         </CardContent>
       </Card>
 

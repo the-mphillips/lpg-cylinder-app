@@ -14,12 +14,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
-import { Settings, Users, Mail, Activity, FileText, Building2, Save, Plus, Trash2, Edit, Palette, Search, Signature, Shield, MoreHorizontal, Eye, UserCheck, UserX } from 'lucide-react'
+import { Settings, Users, Mail, Activity, Building2, Save, Plus, Trash2, Edit, Palette, Search, Signature, Shield, MoreHorizontal, Eye, UserCheck, UserX } from 'lucide-react'
 import { api } from '@/lib/trpc/client'
 import { toast } from 'sonner'
 import { UserEditModal } from '@/components/modals/user-edit-modal'
 import { SignatureManagementModal } from '@/components/modals/signature-management-modal'
 import { BrandingSettingsTab } from '@/components/branding-settings-tab'
+
 import { UnifiedLogsTable } from '@/components/ui/unified-logs-table'
 import { buildSignatureUrl } from '@/lib/supabase/storage'
 
@@ -942,7 +943,7 @@ function EmailSettingsTab() {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5" />
+          <Mail className="h-5 w-5" />
           Email Logs
         </CardTitle>
         <CardDescription>History of sent emails and delivery status</CardDescription>

@@ -1,7 +1,6 @@
 'use client'
 
 import React from 'react'
-import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
 interface ReportFooterProps {
@@ -41,57 +40,68 @@ export function ReportFooter({
 
   return (
     <div className={cn(
-      "w-full space-y-3",
+      "w-full space-y-2",
       "mt-auto", // Push to bottom of container
       printMode && "print:space-y-2"
     )}>
-      {/* Separator Line */}
-      <div className="border-t border-gray-400 w-full"></div>
+      {/* Separator Line - moved higher */}
+      <div className="border-t border-gray-400 w-full mb-4"></div>
 
-      {/* Footer Content */}
-      <div className="grid grid-cols-[auto_1fr_auto_1fr_auto] gap-4 items-start text-[10px]">
-        {/* Date */}
-        <div className="font-bold">Date:</div>
-        <div className="min-w-[120px]">{formatDate(date)}</div>
+      {/* Footer Content - 3x2 Grid with better spacing */}
+      <div className="grid grid-cols-3 grid-rows-2 gap-x-8 gap-y-2 text-[12px] pt-2 leading-relaxed">
+        {/* Row 1, Column 1: Date */}
+        <div className="flex gap-2 items-baseline">
+          <span className="font-bold">Date:</span>
+          <span>{formatDate(date)}</span>
+        </div>
 
-        {/* Vehicle ID */}
-        <div className="font-bold">Vehicle ID:</div>
-        <div className="min-w-[80px]">{vehicleId || ''}</div>
+        {/* Row 1, Column 2: Vehicle ID */}
+        <div className="flex gap-2 items-baseline">
+          <span className="font-bold">Vehicle ID:</span>
+          <span>{vehicleId || ''}</span>
+        </div>
 
-        {/* Signature Area */}
-        <div className="row-span-2 flex flex-col items-end justify-start min-w-[120px]">
+        {/* Row 1, Column 3: Empty */}
+        <div></div>
+
+        {/* Row 2, Column 1: Testers */}
+        <div className="flex gap-2 items-baseline">
+          <span className="font-bold">Testers:</span>
+          <span>{formatTesters(testerNames)}</span>
+        </div>
+
+        {/* Row 2, Column 2: Approved Signatory */}
+        <div className="flex gap-2 items-baseline">
+          <span className="font-bold">Approved Signatory:</span>
+          <span>{approvedSignatory || ''}</span>
+        </div>
+
+        {/* Row 2, Column 3: Signature - absolutely positioned to align with text baseline */}
+        <div className="relative">
           {signatureFile ? (
-            <div className="flex flex-col items-center">
-              <Image
-                src={`/api/signatures/${signatureFile}`}
-                alt="Authorized Signatory's signature"
-                width={100}
-                height={30}
-                className={cn(
-                  "max-w-[100px] max-h-[30px] object-contain",
-                  "border rounded bg-white",
-                  printMode && "print:block"
-                )}
-                unoptimized // For signatures, we don't need Next.js optimization
-              />
-            </div>
+            <img
+              src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/user-data/${signatureFile}`}
+              alt="Authorized Signatory's signature"
+              className={cn(
+                "max-w-[150px] max-h-[50px] object-contain absolute bottom-0 left-0",
+                printMode && "print:block"
+              )}
+              onError={(e) => {
+                console.log(`[SIGNATURE DEBUG] Failed to load signature: ${signatureFile}`)
+                console.log(`[SIGNATURE DEBUG] Full URL attempted: ${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/user-data/${signatureFile}`)
+                e.currentTarget.style.display = 'none'
+              }}
+              onLoad={() => {
+                console.log(`[SIGNATURE DEBUG] Successfully loaded signature: ${signatureFile}`)
+                console.log(`[SIGNATURE DEBUG] Full URL loaded: ${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/user-data/${signatureFile}`)
+              }}
+            />
           ) : (
-            <div className="text-gray-500 text-[8px] italic">
+            <div className="text-gray-500 text-[10px] italic">
               No signature on file.
             </div>
           )}
         </div>
-      </div>
-
-      {/* Second Row */}
-      <div className="grid grid-cols-[auto_1fr_auto_1fr] gap-4 items-start text-[10px]">
-        {/* Testers */}
-        <div className="font-bold">Testers:</div>
-        <div className="min-w-[120px]">{formatTesters(testerNames)}</div>
-
-        {/* Approved Signatory */}
-        <div className="font-bold">Approved Signatory:</div>
-        <div className="min-w-[80px]">{approvedSignatory || ''}</div>
       </div>
     </div>
   )
