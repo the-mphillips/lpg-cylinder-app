@@ -1033,6 +1033,16 @@ export default function NewReportPage() {
             </CardContent>
           </Card>
 
+          {/* Cylinder Data */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Cylinder Data</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CylinderDataForm />
+            </CardContent>
+          </Card>
+
           {/* Office Information */}
           <Card>
             <CardHeader>
@@ -1115,16 +1125,6 @@ export default function NewReportPage() {
                   </FormItem>
                 )}
               />
-            </CardContent>
-          </Card>
-
-          {/* Cylinder Data */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Cylinder Data</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CylinderDataForm />
             </CardContent>
           </Card>
 
