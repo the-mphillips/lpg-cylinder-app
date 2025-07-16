@@ -32,6 +32,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { MultiImageUpload } from "@/components/ui/multi-image-upload"
+import { MultiSelectEquipment } from "@/components/ui/multi-select-equipment"
 // Simple toast replacement for now
 const useToast = () => ({
   toast: ({ title, description, variant }: { title: string; description: string; variant?: string }) => {
@@ -89,7 +91,7 @@ const draftReportSchema = z.object({
   thirdTester: z.string().optional(),
   // Office-only fields (not included in printed reports)
   notes: z.string().optional(),
-  equipment_used: z.string().optional(),
+  equipment_used: z.array(z.string()).optional().default([]),
   images: z.array(z.string()).optional().default([]),
   cylinders: z.array(baseCylinderSchema).optional().default([{
     cylinderNo: '',
@@ -127,7 +129,7 @@ const finalReportSchema = z.object({
   thirdTester: z.string().optional(),
   // Office-only fields (not included in printed reports)
   notes: z.string().optional(),
-  equipment_used: z.string().optional(),
+  equipment_used: z.array(z.string()).optional().default([]),
   images: z.array(z.string()).optional().default([]),
   cylinders: z.array(fullCylinderSchema).min(1, "At least one cylinder is required")
    .max(25, "Maximum of 25 cylinders allowed per report (fits on 1 A4 page)"),
@@ -541,182 +543,190 @@ export default function NewReportPage() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          {/* Customer Information */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Customer Details</CardTitle>
-              <div className="text-red-600 font-semibold">
-                Temporary Test Report Number: {nextReportNumber}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Customer Type */}
-              <FormField
-                control={form.control}
-                name="customerType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Customer Type</FormLabel>
-                    <Select onValueChange={(value) => {
-                      field.onChange(value)
-                      form.setValue('majorCustomer', '')
-                      form.setValue('customerName', '')
-                    }} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select customer type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="major">Major Customer</SelectItem>
-                        <SelectItem value="other">Other/New</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Customer Information and Gas Information - Side by Side */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Customer Details - 3 columns */}
+            <div className="lg:col-span-3">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>Customer Details</CardTitle>
+                  <div className="text-red-600 font-semibold">
+                    Temporary Test Report Number: {nextReportNumber}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Customer Type */}
+                  <FormField
+                    control={form.control}
+                    name="customerType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Customer Type</FormLabel>
+                        <Select onValueChange={(value) => {
+                          field.onChange(value)
+                          form.setValue('majorCustomer', '')
+                          form.setValue('customerName', '')
+                        }} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select customer type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="major">Major Customer</SelectItem>
+                            <SelectItem value="other">Other/New</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              {/* Major Customer - only show if customer type is major */}
-              {customerTypeValue === 'major' && (
-                <FormField
-                  control={form.control}
-                  name="majorCustomer"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Major Customer</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                  {/* Major Customer - only show if customer type is major */}
+                  {customerTypeValue === 'major' && (
+                    <FormField
+                      control={form.control}
+                      name="majorCustomer"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Major Customer</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select major customer" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {majorCustomers.map((customer) => (
+                                <SelectItem key={customer.id} value={customer.id}>
+                                  {customer.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  <FormField
+                    control={form.control}
+                    name="customerName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {customerTypeValue === 'major' ? 'Additional Customer Info' : 'Customer Name'}
+                        </FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select major customer" />
-                          </SelectTrigger>
+                          <Input 
+                            placeholder={
+                              customerTypeValue === 'major' 
+                                ? "Additional customer details (optional)" 
+                                : "Enter customer name"
+                            }
+                            disabled={customerTypeValue === ''}
+                            autoComplete="organization"
+                            {...field} 
+                          />
                         </FormControl>
-                        <SelectContent>
-                          {majorCustomers.map((customer) => (
-                            <SelectItem key={customer.id} value={customer.id}>
-                              {customer.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <FormField
-                control={form.control}
-                name="customerName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      {customerTypeValue === 'major' ? 'Additional Customer Info' : 'Customer Name'}
-                    </FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder={
-                          customerTypeValue === 'major' 
-                            ? "Additional customer details (optional)" 
-                            : "Enter customer name"
-                        }
-                        disabled={customerTypeValue === ''}
-                        {...field} 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="address"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Address</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Enter address" 
-                        autoComplete="address-line1"
-                        {...field} 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="suburb"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Suburb</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="Enter suburb" 
-                          autoComplete="address-level2"
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="state"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>State</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                  <FormField
+                    control={form.control}
+                    name="address"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Address</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select state" />
-                          </SelectTrigger>
+                          <Input 
+                            placeholder="Enter address" 
+                            autoComplete="street-address"
+                            {...field} 
+                          />
                         </FormControl>
-                                                  <SelectContent>
-                            {(formDefaults?.stateOptions || []).map((option) => (
-                              <SelectItem key={option.value} value={option.value}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="postcode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Postcode</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter 4-digit postcode" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="suburb"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Suburb</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="Enter suburb" 
+                              autoComplete="address-level2"
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-          {/* Gas Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Gas Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Gas Type */}
-                <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="state"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>State</FormLabel>
+                          <FormControl>
+                            <select
+                              {...field}
+                              autoComplete="address-level1"
+                              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <option value="">Select state</option>
+                              {(formDefaults?.stateOptions || []).map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="postcode"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Postcode</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="Enter 4-digit postcode" 
+                              autoComplete="postal-code"
+                              {...field} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Gas Information - 1 column */}
+            <div className="lg:col-span-1">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Gas Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Gas Type */}
                   <FormField
                     control={form.control}
                     name="cylinder_gas_type"
@@ -759,10 +769,8 @@ export default function NewReportPage() {
                       )}
                     />
                   )}
-                </div>
 
-                {/* Size */}
-                <div className="space-y-4">
+                  {/* Size */}
                   <FormField
                     control={form.control}
                     name="size"
@@ -805,10 +813,8 @@ export default function NewReportPage() {
                       )}
                     />
                   )}
-                </div>
 
-                {/* Supplier */}
-                <div className="space-y-4">
+                  {/* Supplier */}
                   <FormField
                     control={form.control}
                     name="gas_supplier"
@@ -851,10 +857,10 @@ export default function NewReportPage() {
                       )}
                     />
                   )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
 
           {/* Report Details */}
           <Card>
@@ -1075,68 +1081,35 @@ export default function NewReportPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Images</FormLabel>
+                    <div className="text-sm text-muted-foreground mb-2">
+                      Upload photos of findings or conditions (for office reference only)
+                    </div>
                     <FormControl>
-                      <div className="space-y-2">
-                        <div className="text-sm text-muted-foreground">
-                          Upload photos of findings or conditions (for office reference only)
-                        </div>
-                        <Input 
-                          type="file"
-                          multiple
-                          accept="image/*"
-                          onChange={async (e) => {
-                            const files = Array.from(e.target.files || [])
-                            if (files.length === 0) return
-
-                            try {
-                              const formData = new FormData()
-                              files.forEach(file => formData.append('images', file))
-
-                              const response = await fetch('/api/upload/images', {
-                                method: 'POST',
-                                body: formData
-                              })
-
-                              if (!response.ok) {
-                                throw new Error('Upload failed')
-                              }
-
-                              const result = await response.json()
-                              
-                              if (result.success) {
-                                // Store the file paths for database storage
-                                const filePaths = result.uploadedFiles.map((file: { filePath: string }) => file.filePath)
-                                field.onChange([...(field.value || []), ...filePaths])
-                                
-                                toast({
-                                  title: "Images uploaded",
-                                  description: `${result.uploadedFiles.length} images uploaded successfully`
-                                })
-                                
-                                if (result.errors) {
-                                  toast({
-                                    title: "Some uploads failed",
-                                    description: result.errors.join(', '),
-                                    variant: "destructive"
-                                  })
-                                }
-                              }
-                            } catch (error) {
-                              console.error('Upload error:', error)
-                              toast({
-                                title: "Upload failed",
-                                description: "Failed to upload images. Please try again.",
-                                variant: "destructive"
-                              })
-                            }
-                          }}
-                        />
-                        {field.value && field.value.length > 0 && (
-                          <div className="text-sm text-muted-foreground">
-                            {field.value.length} file(s) selected: {field.value.join(', ')}
-                          </div>
-                        )}
-                      </div>
+                      <MultiImageUpload
+                        value={field.value || []}
+                        onChange={field.onChange}
+                        maxFiles={10}
+                        maxSizeMB={10}
+                        onUploadStart={() => {
+                          toast({
+                            title: "Uploading",
+                            description: "Uploading images..."
+                          })
+                        }}
+                        onUploadComplete={(results) => {
+                          toast({
+                            title: "Images uploaded",
+                            description: `${results.length} images uploaded successfully`
+                          })
+                        }}
+                        onUploadError={(error) => {
+                          toast({
+                            title: "Upload failed",
+                            description: error,
+                            variant: "destructive"
+                          })
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

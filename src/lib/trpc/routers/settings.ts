@@ -69,7 +69,7 @@ export const settingsRouter = createTRPCRouter({
         .from('app_settings')
         .select('category, key, value')
         .in('category', ['reports'])
-        .in('key', ['default_gas_types', 'default_cylinder_sizes', 'default_gas_suppliers', 'default_vehicle_ids']);
+        .in('key', ['default_gas_types', 'default_cylinder_sizes', 'default_gas_suppliers', 'default_vehicle_ids', 'default_equipment_options']);
 
       if (error) {
         throw new TRPCError({
@@ -85,6 +85,7 @@ export const settingsRouter = createTRPCRouter({
         cylinderSizes: [] as string[],
         gasSuppliers: [] as string[],
         vehicleIds: [] as string[],
+        equipmentOptions: [] as string[],
         stateOptions: [
           { label: 'Victoria', value: 'VIC' },
           { label: 'New South Wales', value: 'NSW' },
@@ -127,6 +128,9 @@ export const settingsRouter = createTRPCRouter({
           case 'default_vehicle_ids':
             defaults.vehicleIds = value;
             break;
+          case 'default_equipment_options':
+            defaults.equipmentOptions = value;
+            break;
         }
       });
 
@@ -143,10 +147,11 @@ export const settingsRouter = createTRPCRouter({
       
       // Fallback to hardcoded values if database fails
       return {
-        gasTypes: ['LPG', 'Compressed Air', 'Nitrogen', 'Other'],
+        gasTypes: ['LPG', 'Refrigerant Gas', 'Other'],
         cylinderSizes: ['4kg', '9kg', '15kg', '45kg', '90kg', '190kg', '210kg', 'Other'],
         gasSuppliers: ['SUPAGAS', 'ELGAS', 'ORIGIN', 'Other'],
         vehicleIds: ['BWA-01', 'BWA-02', 'BWA-03', 'BWA-04', 'BWA-05', 'BWA-06', 'BWA-07', 'BWA-08', 'BWA-TAS', 'Other'],
+        equipmentOptions: ['Pressure Gauge', 'Test Pump', 'Safety Equipment', 'Inspection Tools', 'Measuring Equipment', 'Weighing Scale', 'Valve Testing Equipment', 'Leak Detection Equipment'],
         stateOptions: [
           { label: 'Victoria', value: 'VIC' },
           { label: 'New South Wales', value: 'NSW' },
