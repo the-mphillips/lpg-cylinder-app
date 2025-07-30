@@ -51,10 +51,10 @@ export function BrandingSettingsTab() {
   const reportMarkRef = useRef<HTMLInputElement>(null)
 
   // Mutations
-  const { mutateAsync: updateBrandingSetting } = api.admin.updateAppSetting.useMutation()
+  const { mutateAsync: updateSystemSetting } = api.admin.updateSystemSetting.useMutation()
 
   // Queries
-  const { data: brandingSettings, isLoading, refetch } = api.admin.getBrandingSettings.useQuery()
+  const { data: systemSettings, isLoading, refetch } = api.admin.getSystemSettings.useQuery()
 
   const safeStringValue = (value: unknown): string => {
     if (value === null || value === undefined) return ''
@@ -74,20 +74,26 @@ export function BrandingSettingsTab() {
   }
 
   useEffect(() => {
-    if (brandingSettings) {
+    if (systemSettings) {
+      // Convert array of settings to object
+      const settingsObj: Record<string, unknown> = {}
+      systemSettings.forEach(setting => {
+        settingsObj[setting.key] = setting.value
+      })
+      
       const newCompanyInfo = {
-        company_name: safeStringValue(brandingSettings.company_name),
-        company_tagline: safeStringValue(brandingSettings.company_tagline),
-        company_address: safeObjectValue(brandingSettings.company_address, defaultAddress),
-        company_contact: safeObjectValue(brandingSettings.company_contact, defaultContact)
+        company_name: safeStringValue(settingsObj.company_name),
+        company_tagline: safeStringValue(settingsObj.company_tagline),
+        company_address: safeObjectValue(settingsObj.company_address, defaultAddress),
+        company_contact: safeObjectValue(settingsObj.company_contact, defaultContact)
       }
       
       const newVisualSettings = {
-        primary_color: safeStringValue(brandingSettings.primary_color) || '#3D3D3D',
-        secondary_color: safeStringValue(brandingSettings.secondary_color) || '#F79226',
-        logo_light_url: safeStringValue(brandingSettings.logo_light_url),
-        logo_dark_url: safeStringValue(brandingSettings.logo_dark_url),
-        favicon_url: safeStringValue(brandingSettings.favicon_url)
+        primary_color: safeStringValue(settingsObj.primary_color) || '#3D3D3D',
+        secondary_color: safeStringValue(settingsObj.secondary_color) || '#F79226',
+        logo_light_url: safeStringValue(settingsObj.logo_light_url),
+        logo_dark_url: safeStringValue(settingsObj.logo_dark_url),
+        favicon_url: safeStringValue(settingsObj.favicon_url)
       }
       
       setCompanyInfo(newCompanyInfo)
@@ -96,21 +102,21 @@ export function BrandingSettingsTab() {
       
       // Load report settings
       const newReportSettings = {
-        test_station_number: safeStringValue(brandingSettings.test_station_number) || '871',
-        test_station_text: safeStringValue(brandingSettings.test_station_text) || 'SAI GLOBAL APPROVED TEST STATION NO. 871',
-        company_abn: safeStringValue(brandingSettings.company_abn),
-        company_phone: safeStringValue(brandingSettings.company_phone),
-        company_email: safeStringValue(brandingSettings.company_email),
-        company_address_line1: safeStringValue(brandingSettings.company_address_line1),
-        company_address_line2: safeStringValue(brandingSettings.company_address_line2),
-        logo_url: safeStringValue(brandingSettings.logo_url),
-        mark_url: safeStringValue(brandingSettings.mark_url)
+        test_station_number: safeStringValue(settingsObj.test_station_number) || '871',
+        test_station_text: safeStringValue(settingsObj.test_station_text) || 'SAI GLOBAL APPROVED TEST STATION NO. 871',
+        company_abn: safeStringValue(settingsObj.company_abn),
+        company_phone: safeStringValue(settingsObj.company_phone),
+        company_email: safeStringValue(settingsObj.company_email),
+        company_address_line1: safeStringValue(settingsObj.company_address_line1),
+        company_address_line2: safeStringValue(settingsObj.company_address_line2),
+        logo_url: safeStringValue(settingsObj.logo_url),
+        mark_url: safeStringValue(settingsObj.mark_url)
       }
       
       setReportSettings(newReportSettings)
       setOriginalReportSettings(newReportSettings)
     }
-  }, [brandingSettings])
+  }, [systemSettings])
 
   // Save only changed company information
   const handleSaveCompanyInfo = async () => {
@@ -119,32 +125,28 @@ export function BrandingSettingsTab() {
       
       // Only update fields that have actually changed
       if (companyInfo.company_name !== originalCompanyInfo.company_name) {
-        updates.push(updateBrandingSetting({
-          category: 'branding',
+        updates.push(updateSystemSetting({
           key: 'company_name',
           value: JSON.stringify(companyInfo.company_name)
         }))
       }
       
       if (companyInfo.company_tagline !== originalCompanyInfo.company_tagline) {
-        updates.push(updateBrandingSetting({
-          category: 'branding',
+        updates.push(updateSystemSetting({
           key: 'company_tagline',
           value: JSON.stringify(companyInfo.company_tagline)
         }))
       }
       
       if (JSON.stringify(companyInfo.company_address) !== JSON.stringify(originalCompanyInfo.company_address)) {
-        updates.push(updateBrandingSetting({
-          category: 'branding',
+        updates.push(updateSystemSetting({
           key: 'company_address',
           value: JSON.stringify(JSON.stringify(companyInfo.company_address))
         }))
       }
       
       if (JSON.stringify(companyInfo.company_contact) !== JSON.stringify(originalCompanyInfo.company_contact)) {
-        updates.push(updateBrandingSetting({
-          category: 'branding',
+        updates.push(updateSystemSetting({
           key: 'company_contact',
           value: JSON.stringify(JSON.stringify(companyInfo.company_contact))
         }))
@@ -179,8 +181,7 @@ export function BrandingSettingsTab() {
       Object.keys(reportSettings).forEach((key) => {
         const typedKey = key as keyof typeof reportSettings
         if (reportSettings[typedKey] !== originalReportSettings[typedKey]) {
-          updates.push(updateBrandingSetting({
-            category: 'reports',
+          updates.push(updateSystemSetting({
             key: typedKey,
             value: JSON.stringify(reportSettings[typedKey])
           }))
@@ -291,8 +292,7 @@ export function BrandingSettingsTab() {
     try {
       setVisualSettings(prev => ({ ...prev, [colorType]: color }))
       
-      await updateBrandingSetting({
-        category: 'branding',
+      await updateSystemSetting({
         key: colorType,
         value: JSON.stringify(color)
       })

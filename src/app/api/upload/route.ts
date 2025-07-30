@@ -110,6 +110,21 @@ export async function POST(request: NextRequest) {
     
     if (type === 'signature') {
       bucketName = 'user-data'
+      
+      // Check if user already has a signature and delete it
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('signature')
+        .eq('id', userId)
+        .single()
+      
+      if (existingUser?.signature) {
+        // Delete the existing signature file
+        await supabase.storage
+          .from(bucketName)
+          .remove([existingUser.signature])
+      }
+      
       const fileName = `${subType || userId}-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
       filePath = `signatures/${fileName}`
     } else {
@@ -152,6 +167,22 @@ export async function POST(request: NextRequest) {
     // 8. Save branding settings if it's a logo upload
     if (type === 'branding' && publicUrl) {
       await saveBrandingSetting(subType, publicUrl)
+    }
+
+    // 8.5. Update user signature in database if it's a signature upload
+    if (type === 'signature' && publicUrl) {
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ 
+          signature: publicUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId)
+      
+      if (updateError) {
+        console.error('Failed to update user signature in database:', updateError)
+        // Don't fail the upload, but log the error
+      }
     }
 
     // 9. Log the upload (optional - for audit trail)

@@ -5,7 +5,6 @@ import { format } from 'date-fns'
 import { 
   Globe, 
   Clock, 
-  Filter, 
   Search, 
   RefreshCw, 
   Eye, 
@@ -15,17 +14,13 @@ import {
   XCircle, 
   Zap,
   Mail,
-  Settings,
   FileText,
   Shield,
   Database,
-  Activity,
-  ChevronDown,
-  ChevronRight,
-  ExternalLink
+  Activity
 } from 'lucide-react'
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -143,7 +138,6 @@ export function UnifiedLogsTable({ logs, isLoading = false, onRefresh, title = "
   const [levelFilter, setLevelFilter] = useState<string>('all')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [userFilter, setUserFilter] = useState<string>('all')
-  const [selectedLog, setSelectedLog] = useState<UnifiedLogEntry | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 20
 
@@ -549,7 +543,7 @@ export function UnifiedLogsTable({ logs, isLoading = false, onRefresh, title = "
                     <TableCell>
                       <Dialog>
                         <DialogTrigger asChild>
-                          <Button variant="ghost" size="sm" onClick={() => setSelectedLog(log)}>
+                          <Button variant="ghost" size="sm">
                             <Eye className="h-4 w-4" />
                           </Button>
                         </DialogTrigger>

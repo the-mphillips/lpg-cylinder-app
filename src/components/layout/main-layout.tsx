@@ -113,13 +113,19 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   )
 
   // Get branding settings for company name and theming
-  const { data: brandingSettings } = api.admin.getBrandingSettings.useQuery(
+  const { data: systemSettings = [] } = api.admin.getSystemSettings.useQuery(
     undefined,
     { 
       enabled: !isLoginPage,
       retry: false
     }
   )
+  
+  // Convert array of settings to object for easier access
+  const brandingSettings = systemSettings.reduce((acc: Record<string, unknown>, setting) => {
+    acc[setting.key] = setting.value
+    return acc
+  }, {})
 
   // Apply dynamic theming based on branding settings
   useEffect(() => {

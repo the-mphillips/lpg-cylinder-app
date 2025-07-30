@@ -168,6 +168,33 @@ export async function uploadBrandingImage(
  */
 export async function deleteFile(bucket: string, path: string): Promise<UploadResult> {
   try {
+    // For signature deletion, use the API route
+    if (bucket === 'user-data' && path.includes('signatures/')) {
+      const response = await fetch('/api/signature/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          signaturePath: path,
+        }),
+      })
+
+      const result = await response.json()
+      
+      if (!response.ok) {
+        return {
+          success: false,
+          error: result.error || 'Failed to delete signature'
+        }
+      }
+
+      return {
+        success: true
+      }
+    }
+
+    // For other files, use the service client (server-side only)
     const supabaseClient = getServiceClient()
     const { error } = await supabaseClient.storage
       .from(bucket)
@@ -218,11 +245,9 @@ export async function getSignedUrl(bucket: string, path: string, expiresIn: numb
 /**
  * Build full public URL for signature files
  */
-export function buildSignatureUrl(signaturePath: string): string {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  if (!supabaseUrl) {
-    console.error('NEXT_PUBLIC_SUPABASE_URL not configured')
-    return signaturePath
+export async function buildSignatureUrl(signaturePath: string): Promise<string> {
+  if (!signaturePath) {
+    return ''
   }
   
   // If it's already a full URL, return as is
@@ -236,8 +261,14 @@ export function buildSignatureUrl(signaturePath: string): string {
   // If the path doesn't start with 'signatures/', prepend it
   const fullPath = cleanPath.startsWith('signatures/') ? cleanPath : `signatures/${cleanPath}`
   
-  // Build the full public URL
-  return `${supabaseUrl}/storage/v1/object/public/user-data/${fullPath}`
+  // For user-data bucket, we need to use signed URLs since it's not public
+  try {
+    const signedUrl = await getSignedUrl('user-data', fullPath, 3600)
+    return signedUrl || ''
+  } catch (error) {
+    console.error('Error getting signed URL for signature:', error)
+    return ''
+  }
 }
 
 /**

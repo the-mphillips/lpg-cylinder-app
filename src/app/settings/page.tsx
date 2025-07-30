@@ -14,16 +14,63 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
-import { Settings, Users, Mail, Activity, Building2, Save, Plus, Trash2, Edit, Palette, Search, Signature, Shield, MoreHorizontal, Eye, UserCheck, UserX } from 'lucide-react'
+import { Settings, Users, Mail, Activity, Building2, Save, Plus, Trash2, Edit, Palette, Search, Signature, MoreHorizontal, Eye, UserCheck, UserX } from 'lucide-react'
 import { api } from '@/lib/trpc/client'
+import type { AppRouter } from "@/lib/trpc/routers/_app";
+import { type inferRouterOutputs } from "@trpc/server";
 import { toast } from 'sonner'
 import { UserEditModal } from '@/components/modals/user-edit-modal'
 import { SignatureManagementModal } from '@/components/modals/signature-management-modal'
 import { BrandingSettingsTab } from '@/components/branding-settings-tab'
+import { EquipmentSettingsTab } from '@/components/equipment-settings-tab'
 
 import { UnifiedLogsTable } from '@/components/ui/unified-logs-table'
 import { buildSignatureUrl } from '@/lib/supabase/storage'
 
+// Component to handle async signature URL loading
+function SignatureImage({ signaturePath, alt }: { signaturePath?: string, alt: string }) {
+  const [src, setSrc] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadSignatureUrl() {
+      if (signaturePath) {
+        try {
+          const url = await buildSignatureUrl(signaturePath)
+          setSrc(url)
+        } catch (error) {
+          console.error('Error loading signature:', error)
+          setSrc('')
+        }
+      } else {
+        setSrc('')
+      }
+      setLoading(false)
+    }
+    loadSignatureUrl()
+  }, [signaturePath])
+
+  if (loading) {
+    return <div className="w-full h-full bg-gray-100 animate-pulse rounded" />
+  }
+
+  if (!src) {
+    return <div className="w-full h-full bg-gray-50 flex items-center justify-center text-gray-400 text-xs">No signature</div>
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="w-full h-full object-contain"
+    />
+  )
+}
+
+
+type RouterOutputs = inferRouterOutputs<AppRouter>;
+type User = RouterOutputs["admin"]["getAllUsers"][number];
+type Customer = RouterOutputs["admin"]["getAllCustomers"][number];
 
 // Helper function to get role color
 function getRoleColor(role: string): string {
@@ -39,26 +86,27 @@ function getRoleColor(role: string): string {
 
 // App Settings Tab with edit mode functionality
 function AppSettingsTab() {
-  const { data: settings, isLoading, error, refetch } = api.admin.getAllAppSettings.useQuery()
-  const updateSetting = api.admin.updateAppSetting.useMutation()
+  const { data: systemSettings, isLoading: systemLoading } = api.admin.getSystemSettings.useQuery()
+  const { data: securitySettings, isLoading: securityLoading } = api.admin.getSecuritySettings.useQuery()
+  const updateSystemSetting = api.admin.updateSystemSetting.useMutation()
+  const updateSecuritySetting = api.admin.updateSecuritySetting.useMutation()
   const [editingSettings, setEditingSettings] = useState<Record<string, unknown>>({})
   const [editingCategories, setEditingCategories] = useState<Record<string, boolean>>({})
 
-  // Group settings by category, excluding branding and email categories since they have dedicated tabs
-  const settingsByCategory: Record<string, any[]> = {}
-  if (Array.isArray(settings)) {
-    settings.forEach((setting: any) => {
-      // Skip branding and email settings as they have dedicated tabs
-      if (setting.category === 'branding' || setting.category === 'email') {
-        return
-      }
-      
-      if (!settingsByCategory[setting.category]) {
-        settingsByCategory[setting.category] = []
-      }
-      settingsByCategory[setting.category].push(setting)
-    })
-  }
+  // Combine settings from different categories
+  const allSettings = [
+    ...(systemSettings || []),
+    ...(securitySettings || [])
+  ]
+
+  // Group settings by category
+  const settingsByCategory: Record<string, (RouterOutputs["admin"]["getSystemSettings"][number] | RouterOutputs["admin"]["getSecuritySettings"][number])[]> = {}
+  allSettings.forEach((setting) => {
+    if (!settingsByCategory[setting.category]) {
+      settingsByCategory[setting.category] = []
+    }
+    settingsByCategory[setting.category].push(setting)
+  })
 
   const handleSettingChange = (id: string, value: unknown) => {
     setEditingSettings(prev => ({ ...prev, [id]: value }))
@@ -68,17 +116,18 @@ function AppSettingsTab() {
     const categorySettings = settingsByCategory[category] || []
     const promises = categorySettings
       .filter(setting => editingSettings[setting.id] !== undefined)
-      .map(setting => 
-        updateSetting.mutateAsync({
-          id: setting.id,
-          value: editingSettings[setting.id]
+      .map(setting => {
+        const updateFunction = category === 'system' ? updateSystemSetting : updateSecuritySetting
+        return updateFunction.mutateAsync({
+          key: setting.key,
+          value: String(editingSettings[setting.id]),
+          description: setting.description
         })
-      )
+      })
 
     try {
       await Promise.all(promises)
       toast.success(`${category} settings updated successfully`)
-      refetch()
       // Clear editing state for this category
       setEditingSettings(prev => {
         const newState = { ...prev }
@@ -88,8 +137,9 @@ function AppSettingsTab() {
         return newState
       })
       setEditingCategories(prev => ({ ...prev, [category]: false }))
-    } catch (error: any) {
-      toast.error(`Failed to update ${category} settings: ${error.message}`)
+    } catch (error) {
+      const err = error as { message?: string };
+      toast.error(`Failed to update ${category} settings: ${err.message}`)
     }
   }
 
@@ -109,7 +159,7 @@ function AppSettingsTab() {
     setEditingCategories(prev => ({ ...prev, [category]: true }))
   }
 
-  const renderSettingDisplay = (setting: any, isEditing: boolean) => {
+  const renderSettingDisplay = (setting: RouterOutputs["admin"]["getSystemSettings"][number] | RouterOutputs["admin"]["getSecuritySettings"][number], isEditing: boolean) => {
     const currentValue = editingSettings[setting.id] !== undefined 
       ? editingSettings[setting.id] 
       : setting.value
@@ -180,15 +230,14 @@ function AppSettingsTab() {
     )
   }
 
-  if (isLoading) return <div className="p-4">Loading app settings...</div>
-  if (error) return <div className="p-4 text-red-500">Error: {error.message}</div>
+  if (systemLoading || securityLoading) return <div className="p-4">Loading app settings...</div>
 
   return (
     <div className="space-y-6">
       <Accordion type="multiple" className="space-y-4">
         {Object.entries(settingsByCategory).map(([category, categorySettings]) => {
           const isEditing = editingCategories[category] || false
-          const hasChanges = categorySettings.some((setting: any) => 
+          const hasChanges = categorySettings.some((setting) => 
             editingSettings[setting.id] !== undefined
           )
 
@@ -234,7 +283,7 @@ function AppSettingsTab() {
                     )}
                   </div>
                   <div className="space-y-1 divide-y">
-                    {categorySettings.map((setting: any) => (
+                    {categorySettings.map((setting) => (
                       <div key={setting.id}>
                         {renderSettingDisplay(setting, isEditing)}
                       </div>
@@ -253,55 +302,58 @@ function AppSettingsTab() {
 // User Management Tab with modal editing
 function UserManagementTab() {
   const { data: users, isLoading, refetch } = api.admin.getAllUsers.useQuery()
-  const updateUser = api.admin.updateUserProfile.useMutation()
+  const updateUser = api.admin.updateUser.useMutation()
   const createUser = api.admin.createUser.useMutation()
   const deleteUser = api.admin.deleteUser.useMutation()
+  const updateUserSignature = api.admin.updateUserSignature.useMutation()
   
-  const [editingUser, setEditingUser] = useState<any>(null)
-  const [selectedUserForSignature, setSelectedUserForSignature] = useState<any>(null)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [selectedUserForSignature, setSelectedUserForSignature] = useState<User | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [userToDelete, setUserToDelete] = useState<any>(null)
-  const [userToToggleStatus, setUserToToggleStatus] = useState<any>(null)
+  const [userToDelete, setUserToDelete] = useState<User | null>(null)
+  const [userToToggleStatus, setUserToToggleStatus] = useState<User | null>(null)
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [departmentFilter, setDepartmentFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [newUser, setNewUser] = useState({
     email: '',
+    password: '',
     first_name: '',
     last_name: '',
     username: '',
-    password_hash: '',
     phone: '',
     department: '',
     role: 'Tester' as const
   })
 
-  const handleUpdateUser = async (userId: string, updates: any) => {
+  const handleUpdateUser = async (userId: string, updates: Partial<User>) => {
     try {
       await updateUser.mutateAsync({ id: userId, ...updates })
       toast.success('User updated successfully')
       setEditingUser(null)
       refetch()
-    } catch (error: any) {
-      toast.error(`Failed to update user: ${error.message}`)
+    } catch (error) {
+      const err = error as { message?: string };
+      toast.error(`Failed to update user: ${err.message}`)
     }
   }
 
   const handleSignatureUpdate = async (userId: string, signaturePath: string | null) => {
     try {
-      await updateUser.mutateAsync({ 
-        id: userId, 
-        signature: signaturePath === null ? undefined : signaturePath 
+      await updateUserSignature.mutateAsync({
+        id: userId,
+        signature: signaturePath
       })
       toast.success('Signature updated successfully')
       refetch()
-    } catch (error: any) {
-      toast.error(`Failed to update signature: ${error.message}`)
+    } catch (error) {
+      const err = error as { message?: string };
+      toast.error(`Failed to update signature: ${err.message}`)
     }
   }
 
-  const filteredUsers = users?.filter((user: any) => {
+  const filteredUsers = users?.filter((user) => {
     const matchesSearch = user.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.last_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -317,8 +369,8 @@ function UserManagementTab() {
   }) || []
 
   // Get unique values for filter dropdowns
-  const uniqueRoles = [...new Set(users?.map((user: any) => user.role).filter(Boolean))] || []
-  const uniqueDepartments = [...new Set(users?.map((user: any) => user.department).filter(Boolean))] || []
+  const uniqueRoles = [...new Set(users?.map((user) => user.role).filter(Boolean))]
+  const uniqueDepartments = [...new Set(users?.map((user) => user.department).filter(Boolean))]
 
   const handleCreateUser = async () => {
     try {
@@ -326,18 +378,19 @@ function UserManagementTab() {
       toast.success('User created successfully')
       setNewUser({
         email: '',
+        password: '',
         first_name: '',
         last_name: '',
         username: '',
-        password_hash: '',
         phone: '',
         department: '',
         role: 'Tester'
       })
       setShowCreateForm(false)
       refetch()
-    } catch (error: any) {
-      toast.error(`Failed to create user: ${error.message}`)
+    } catch (error) {
+      const err = error as { message?: string };
+      toast.error(`Failed to create user: ${err.message}`)
     }
   }
 
@@ -347,8 +400,9 @@ function UserManagementTab() {
       toast.success('User deleted successfully')
       setUserToDelete(null)
       refetch()
-    } catch (error: any) {
-      toast.error(`Failed to delete user: ${error.message}`)
+    } catch (error) {
+      const err = error as { message?: string };
+      toast.error(`Failed to delete user: ${err.message}`)
     }
   }
 
@@ -361,8 +415,9 @@ function UserManagementTab() {
       toast.success(`User ${!currentStatus ? 'activated' : 'deactivated'} successfully`)
       setUserToToggleStatus(null)
       refetch()
-    } catch (error: any) {
-      toast.error(`Failed to update user status: ${error.message}`)
+    } catch (error) {
+      const err = error as { message?: string };
+      toast.error(`Failed to update user status: ${err.message}`)
     }
   }
 
@@ -466,10 +521,10 @@ function UserManagementTab() {
                   <Input
                     placeholder="Password"
                     type="password"
-                    value={newUser.password_hash}
-                    onChange={(e) => setNewUser(prev => ({ ...prev, password_hash: e.target.value }))}
+                    value={newUser.password}
+                    onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))}
                   />
-                  <Select value={newUser.role} onValueChange={(value: any) => setNewUser(prev => ({ ...prev, role: value }))}>
+                  <Select value={newUser.role} onValueChange={(value: User['role']) => setNewUser(prev => ({ ...prev, role: value ?? 'Tester' }))}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -518,7 +573,7 @@ function UserManagementTab() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers?.map((user: any) => (
+              {filteredUsers?.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">
                     {user.first_name} {user.last_name}
@@ -535,11 +590,7 @@ function UserManagementTab() {
                           onClick={() => setSelectedUserForSignature(user)}
                           className="group relative w-24 h-12 rounded hover:bg-gray-50 transition-colors"
                         >
-                          <img
-                            src={buildSignatureUrl(user.signature)}
-                            alt={`${user.first_name} ${user.last_name}'s signature`}
-                            className="w-full h-full object-contain"
-                          />
+                                                      <SignatureImage signaturePath={user.signature} alt={`${user.first_name} ${user.last_name}'s signature`} />
                           <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded flex items-center justify-center">
                             <Eye className="h-3 w-3 text-white" />
                           </div>
@@ -683,8 +734,11 @@ function UserManagementTab() {
 // Email Settings Tab with edit mode
 function EmailSettingsTab() {
   const { data: emailSettings, isLoading, refetch } = api.admin.getEmailSettings.useQuery()
-  const { data: emailLogs, isLoading: loadingEmailLogs } = api.admin.getEmailLogs.useQuery({})
-  const updateEmailSettings = api.admin.updateEmailSettings.useMutation()
+  const { data: logs, isLoading: loadingLogs } = api.admin.getLogs.useQuery({ 
+    logType: 'email',
+    limit: 20 
+  })
+  const updateEmailSetting = api.admin.updateEmailSetting.useMutation()
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState({
     smtp_host: '',
@@ -703,49 +757,71 @@ function EmailSettingsTab() {
 
   useEffect(() => {
     if (emailSettings) {
+      // Convert array of settings to object
+      const settingsObj: Record<string, unknown> = {}
+      emailSettings.forEach(setting => {
+        settingsObj[setting.key] = setting.value
+      })
+      
       setFormData({
-        smtp_host: typeof emailSettings.smtp_host === 'string' ? emailSettings.smtp_host : '',
-        smtp_port: typeof emailSettings.smtp_port === 'number' ? emailSettings.smtp_port : 587,
-        smtp_username: typeof emailSettings.smtp_username === 'string' ? emailSettings.smtp_username : '',
-        smtp_password: typeof emailSettings.smtp_password === 'string' ? emailSettings.smtp_password : '',
-        from_email: typeof emailSettings.from_email === 'string' ? emailSettings.from_email : '',
-        from_name: typeof emailSettings.from_name === 'string' ? emailSettings.from_name : '',
-        reply_to_email: typeof emailSettings.reply_to_email === 'string' ? emailSettings.reply_to_email : '',
-        email_signature: typeof emailSettings.email_signature === 'string' ? emailSettings.email_signature : '',
-        use_tls: typeof emailSettings.use_tls === 'boolean' ? emailSettings.use_tls : true,
-        use_ssl: typeof emailSettings.use_ssl === 'boolean' ? emailSettings.use_ssl : false,
-        is_enabled: typeof emailSettings.is_enabled === 'boolean' ? emailSettings.is_enabled : true,
-        subject_prefix: typeof emailSettings.subject_prefix === 'string' ? emailSettings.subject_prefix : '',
+        smtp_host: String(settingsObj.smtp_host || ''),
+        smtp_port: Number(settingsObj.smtp_port) || 587,
+        smtp_username: String(settingsObj.smtp_username || ''),
+        smtp_password: String(settingsObj.smtp_password || ''),
+        from_email: String(settingsObj.from_email || ''),
+        from_name: String(settingsObj.from_name || ''),
+        reply_to_email: String(settingsObj.reply_to_email || ''),
+        email_signature: String(settingsObj.email_signature || ''),
+        use_tls: settingsObj.use_tls === 'true' || settingsObj.use_tls === true,
+        use_ssl: settingsObj.use_ssl === 'true' || settingsObj.use_ssl === true,
+        is_enabled: settingsObj.is_enabled !== 'false' && settingsObj.is_enabled !== false,
+        subject_prefix: String(settingsObj.subject_prefix || ''),
       })
     }
   }, [emailSettings])
 
   const handleSave = async () => {
     try {
-      await updateEmailSettings.mutateAsync(formData)
+      // Update each setting individually
+      const updatePromises = Object.entries(formData).map(([key, value]) =>
+        updateEmailSetting.mutateAsync({
+          key,
+          value: String(value),
+          description: `Email setting: ${key}`
+        })
+      )
+      
+      await Promise.all(updatePromises)
       toast.success('Email settings updated successfully')
       setIsEditing(false)
       refetch()
-    } catch (error: any) {
-      toast.error(`Failed to update email settings: ${error.message}`)
+    } catch (error) {
+      const err = error as { message?: string };
+      toast.error(`Failed to update email settings: ${err.message}`)
     }
   }
 
   const handleCancel = () => {
     if (emailSettings) {
+      // Reset form data to original values
+      const settingsObj: Record<string, unknown> = {}
+      emailSettings.forEach(setting => {
+        settingsObj[setting.key] = setting.value
+      })
+      
       setFormData({
-        smtp_host: typeof emailSettings.smtp_host === 'string' ? emailSettings.smtp_host : '',
-        smtp_port: typeof emailSettings.smtp_port === 'number' ? emailSettings.smtp_port : 587,
-        smtp_username: typeof emailSettings.smtp_username === 'string' ? emailSettings.smtp_username : '',
-        smtp_password: typeof emailSettings.smtp_password === 'string' ? emailSettings.smtp_password : '',
-        from_email: typeof emailSettings.from_email === 'string' ? emailSettings.from_email : '',
-        from_name: typeof emailSettings.from_name === 'string' ? emailSettings.from_name : '',
-        reply_to_email: typeof emailSettings.reply_to_email === 'string' ? emailSettings.reply_to_email : '',
-        email_signature: typeof emailSettings.email_signature === 'string' ? emailSettings.email_signature : '',
-        use_tls: typeof emailSettings.use_tls === 'boolean' ? emailSettings.use_tls : true,
-        use_ssl: typeof emailSettings.use_ssl === 'boolean' ? emailSettings.use_ssl : false,
-        is_enabled: typeof emailSettings.is_enabled === 'boolean' ? emailSettings.is_enabled : true,
-        subject_prefix: typeof emailSettings.subject_prefix === 'string' ? emailSettings.subject_prefix : '',
+        smtp_host: String(settingsObj.smtp_host || ''),
+        smtp_port: Number(settingsObj.smtp_port) || 587,
+        smtp_username: String(settingsObj.smtp_username || ''),
+        smtp_password: String(settingsObj.smtp_password || ''),
+        from_email: String(settingsObj.from_email || ''),
+        from_name: String(settingsObj.from_name || ''),
+        reply_to_email: String(settingsObj.reply_to_email || ''),
+        email_signature: String(settingsObj.email_signature || ''),
+        use_tls: settingsObj.use_tls === 'true' || settingsObj.use_tls === true,
+        use_ssl: settingsObj.use_ssl === 'true' || settingsObj.use_ssl === true,
+        is_enabled: settingsObj.is_enabled !== 'false' && settingsObj.is_enabled !== false,
+        subject_prefix: String(settingsObj.subject_prefix || ''),
       })
     }
     setIsEditing(false)
@@ -773,7 +849,7 @@ function EmailSettingsTab() {
               </Button>
             ) : (
               <div className="flex gap-2">
-                <Button onClick={handleSave} disabled={updateEmailSettings.isPending} className="btn-branded">
+                <Button onClick={handleSave} disabled={updateEmailSetting.isPending} className="btn-branded">
                   <Save className="h-4 w-4 mr-2" />
                   Save
                 </Button>
@@ -949,34 +1025,34 @@ function EmailSettingsTab() {
         <CardDescription>History of sent emails and delivery status</CardDescription>
       </CardHeader>
       <CardContent>
-        {loadingEmailLogs ? (
+        {loadingLogs ? (
           <div>Loading email logs...</div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Recipient</TableHead>
-                <TableHead>Subject</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Sent Date</TableHead>
-                <TableHead>Error</TableHead>
+                <TableHead>Action</TableHead>
+                <TableHead>Message</TableHead>
+                <TableHead>Level</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Details</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {emailLogs?.slice(0, 20).map((log: any) => (
+              {logs?.slice(0, 20).map((log: RouterOutputs["admin"]["getLogs"][number]) => (
                 <TableRow key={log.id}>
-                  <TableCell>{log.recipient_email}</TableCell>
-                  <TableCell className="font-medium">{log.subject}</TableCell>
+                  <TableCell>{log.action}</TableCell>
+                  <TableCell className="font-medium">{log.message}</TableCell>
                   <TableCell>
-                    <Badge variant={log.status === 'sent' ? 'default' : log.status === 'failed' ? 'destructive' : 'secondary'}>
-                      {log.status}
+                    <Badge variant={log.level === 'ERROR' ? 'destructive' : log.level === 'WARN' ? 'secondary' : 'default'}>
+                      {log.level}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {log.sent_at ? new Date(log.sent_at).toLocaleString() : 'N/A'}
+                    {log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}
                   </TableCell>
                   <TableCell className="max-w-xs truncate">
-                    {log.error_message || 'N/A'}
+                    {log.details ? JSON.stringify(log.details).substring(0, 100) + '...' : 'N/A'}
                   </TableCell>
                 </TableRow>
               ))}
@@ -990,26 +1066,6 @@ function EmailSettingsTab() {
 }
 
 // Placeholder tabs for existing functionality
-function SignatoriesTestersTab() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Shield className="h-5 w-5" />
-          Signatories & Testers
-        </CardTitle>
-        <CardDescription>Manage authorized signatories and testers</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="text-center py-8">
-          <p className="text-muted-foreground">This functionality is now integrated into the Users tab.</p>
-          <p className="text-sm text-muted-foreground mt-2">Use the signature management modal in the Users tab to manage user signatures.</p>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
 function MajorCustomersTab() {
   const { data: customers, isLoading } = api.admin.getAllCustomers.useQuery()
   
@@ -1035,7 +1091,7 @@ function MajorCustomersTab() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {customers?.map((customer: any) => (
+            {customers?.map((customer: Customer) => (
               <TableRow key={customer.id}>
                 <TableCell className="font-medium">{customer.name}</TableCell>
                 <TableCell>{customer.contact_person || 'N/A'}</TableCell>
@@ -1055,7 +1111,7 @@ function MajorCustomersTab() {
 }
 
 function SystemLogsTab() {
-  const { data: unifiedLogs, isLoading, refetch } = api.admin.getUnifiedLogs.useQuery({
+  const { data: unifiedLogs, isLoading, refetch } = api.admin.getLogs.useQuery({
     limit: 100
   })
 
@@ -1100,7 +1156,7 @@ export default function SettingsPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="app-settings" className="flex items-center gap-2">
             <Settings className="h-4 w-4" />
             <span className="hidden sm:inline">App Settings</span>
@@ -1108,6 +1164,10 @@ export default function SettingsPage() {
           <TabsTrigger value="branding" className="flex items-center gap-2">
             <Palette className="h-4 w-4" />
             <span className="hidden sm:inline">Branding</span>
+          </TabsTrigger>
+          <TabsTrigger value="equipment" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            <span className="hidden sm:inline">Equipment</span>
           </TabsTrigger>
           <TabsTrigger value="email" className="flex items-center gap-2">
             <Mail className="h-4 w-4" />
@@ -1133,6 +1193,10 @@ export default function SettingsPage() {
 
         <TabsContent value="branding">
           <BrandingSettingsTab />
+        </TabsContent>
+
+        <TabsContent value="equipment">
+          <EquipmentSettingsTab />
         </TabsContent>
 
         <TabsContent value="email">

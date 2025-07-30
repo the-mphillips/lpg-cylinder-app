@@ -54,12 +54,15 @@ export function SignatureManagementModal({
 
   // Load signature when user changes
   useEffect(() => {
-    if (user?.signature) {
-      const url = buildSignatureUrl(user.signature)
-      setSignatureUrl(url)
-    } else {
-      setSignatureUrl(null)
+    async function loadSignatureUrl() {
+      if (user?.signature) {
+        const url = await buildSignatureUrl(user.signature)
+        setSignatureUrl(url)
+      } else {
+        setSignatureUrl(null)
+      }
     }
+    loadSignatureUrl()
   }, [user])
 
   const validateFile = (file: File): string | null => {
@@ -134,7 +137,7 @@ export function SignatureManagementModal({
         
         // Reload signature display
         if (result.path) {
-          const url = buildSignatureUrl(result.path)
+          const url = await buildSignatureUrl(result.path)
           setSignatureUrl(url)
         }
       } else {

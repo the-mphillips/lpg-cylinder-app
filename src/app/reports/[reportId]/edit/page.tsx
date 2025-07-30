@@ -16,6 +16,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Label } from "@/components/ui/label"
+import { MultiImageUpload } from "@/components/ui/multi-image-upload"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -38,86 +39,83 @@ import { api } from "@/lib/trpc/client"
 import { Save, Eye, ArrowLeft } from "lucide-react"
 import { CylinderDataForm } from "../../components/cylinder-data-form"
 import Link from "next/link"
+import { EquipmentMultiSelect } from "@/components/ui/multi-select-combobox"
 
-// Comprehensive validation schema matching the new report form
-const reportSchema = z.object({
-  customerType: z.string().min(1, "Required"),
+const cylinderSchema = z.object({
+  cylinderNo: z.string().optional(),
+  cylinderSpec: z.string().optional(),
+  wc: z.string().optional(),
+  extExam: z.enum(["PASS", "FAIL"]).optional().default("PASS"),
+  intExam: z.enum(["PASS", "FAIL"]).optional().default("PASS"),
+  barcode: z.string().optional(),
+  remarks: z.string().optional(),
+  recordedBy: z.string().optional(),
+});
+
+const reportBaseSchema = z.object({
+  customerType: z.string().optional(),
   majorCustomer: z.string().optional(),
+  customerName: z.string().optional(),
+  address: z.string().optional(),
+  suburb: z.string().optional(),
+  state: z.string().optional(),
+  postcode: z.string().optional(),
+  cylinder_gas_type: z.string().optional(),
+  gasTypeOther: z.string().optional(),
+  size: z.string().optional(),
+  sizeOther: z.string().optional(),
+  gas_supplier: z.string().optional(),
+  supplierOther: z.string().optional(),
+  test_date: z.string().optional(),
+  vehicleId: z.string().optional(),
+  vehicleIdOther: z.string().optional(),
+  work_order: z.string().optional(),
+  primaryTester: z.string().optional(),
+  secondTester: z.string().optional(),
+  thirdTester: z.string().optional(),
+  notes: z.string().optional(),
+  equipment_used: z.array(z.string()).optional().default([]),
+  images: z.array(z.string()).optional().default([]),
+  cylinders: z.array(cylinderSchema).optional().default([{
+    cylinderNo: '',
+    cylinderSpec: '',
+    wc: '',
+    extExam: 'PASS',
+    intExam: 'PASS',
+    barcode: '',
+    remarks: '',
+    recordedBy: '',
+  }]),
+});
+
+const finalReportSchema = reportBaseSchema.extend({
+  customerType: z.string().min(1, "Required"),
   customerName: z.string().min(1, "Required"),
   address: z.string().min(1, "Required"),
   suburb: z.string().min(1, "Required"),
   state: z.string().min(1, "Required"),
   postcode: z.string().min(4, "Required").regex(/^\d{4}$/, "Must be 4 digits"),
   cylinder_gas_type: z.string().min(1, "Required"),
-  gasTypeOther: z.string().optional(),
   size: z.string().min(1, "Required"),
-  sizeOther: z.string().optional(),
   gas_supplier: z.string().min(1, "Required"),
-  supplierOther: z.string().optional(),
   test_date: z.string().min(1, "Required"),
   vehicleId: z.string().min(1, "Required"),
-  vehicleIdOther: z.string().optional(),
   work_order: z.string().min(1, "Required"),
   primaryTester: z.string().min(1, "Required"),
-  secondTester: z.string().optional(),
-  thirdTester: z.string().optional(),
-  // Office-only fields
-  notes: z.string().optional(),
-  equipment_used: z.string().optional(),
-  images: z.array(z.string()).optional().default([]),
   cylinders: z.array(
-    z.object({
+    cylinderSchema.extend({
       cylinderNo: z.string().min(1, "Required"),
       cylinderSpec: z.string().min(1, "Required"),
       wc: z.string().min(1, "Required"),
-      extExam: z.enum(["PASS", "FAIL"], { errorMap: () => ({ message: "Must be PASS or FAIL" }) }),
-      intExam: z.enum(["PASS", "FAIL"], { errorMap: () => ({ message: "Must be PASS or FAIL" }) }),
+      extExam: z.enum(["PASS", "FAIL"]),
+      intExam: z.enum(["PASS", "FAIL"]),
       barcode: z.string().min(1, "Required"),
-      remarks: z.string().optional(),
-      recordedBy: z.string().optional(),
     })
   ).min(1, "At least one cylinder is required")
    .max(25, "Maximum of 25 cylinders allowed per report (fits on 1 A4 page)"),
-}).superRefine((data, ctx) => {
-  // Conditional validation for "Other" fields
-  if (data.customerType === 'major' && !data.majorCustomer) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Required for major customers",
-      path: ["majorCustomer"],
-    })
-  }
-  if (data.cylinder_gas_type === 'Other' && !data.gasTypeOther) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Please specify the gas type",
-      path: ["gasTypeOther"],
-    })
-  }
-  if (data.size === 'Other' && !data.sizeOther) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Please specify the size",
-      path: ["sizeOther"],
-    })
-  }
-  if (data.gas_supplier === 'Other' && !data.supplierOther) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Please specify the supplier",
-      path: ["supplierOther"],
-    })
-  }
-  if (data.vehicleId === 'Other' && !data.vehicleIdOther) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Please specify the vehicle ID",
-      path: ["vehicleIdOther"],
-    })
-  }
-})
+});
 
-type ReportFormData = z.infer<typeof reportSchema>
+type ReportFormData = z.infer<typeof finalReportSchema>;
 
 interface CylinderData {
   cylinderNo: string
@@ -186,7 +184,7 @@ export default function EditReportPage() {
 
   // Initialize form with default values
   const form = useForm<ReportFormData>({
-    resolver: zodResolver(reportSchema),
+    resolver: zodResolver(finalReportSchema),
     defaultValues: {
       customerType: '',
       majorCustomer: '',
@@ -210,7 +208,7 @@ export default function EditReportPage() {
       thirdTester: '',
       // Office-only fields
       notes: '',
-      equipment_used: '',
+      equipment_used: [],
       images: [],
       cylinders: [{
         cylinderNo: '',
@@ -249,19 +247,18 @@ export default function EditReportPage() {
 
   // Load report data into form when available
   useEffect(() => {
-    if (report) {
+    if (report && formDefaults) {
       console.log('Loading report data:', report)
+      console.log('Form defaults:', formDefaults)
       
       // Parse existing data safely
       const testers = Array.isArray(report.tester_names) ? report.tester_names : []
       const address = report.address || { street: '', suburb: '', state: '', postcode: '' }
       const cylinders = Array.isArray(report.cylinder_data) ? report.cylinder_data : []
       
-      // Determine customer type - check if major_customer_id exists and is not null/empty
-      const customerType = report.major_customer_id && report.major_customer_id !== null ? 'major' : 'regular'
+      const customerType = report.major_customer_id ? 'major' : 'other'
       const majorCustomerId = (report.major_customer_id || '').toString()
       
-      // Parse customer name
       let customerName = (report.customer || '').toString()
        
       if (customerType === 'major' && customerName.includes(' - ')) {
@@ -270,52 +267,62 @@ export default function EditReportPage() {
       } else if (customerType === 'major') {
         customerName = ''
       }
-      // For regular customers, keep the full customer name as is
       
-      // Get options with comprehensive fallbacks  
-      const gasTypeOptions = (formDefaults?.gasTypes && Array.isArray(formDefaults.gasTypes) && formDefaults.gasTypes.length > 0) 
-        ? formDefaults.gasTypes 
-        : ['LPG', 'Compressed Air', 'Nitrogen', 'Other']
+      // Use formDefaults with fallbacks
+      const gasTypeOptions = formDefaults?.gasTypes || ['LPG', 'Other']
+      const sizeOptions = formDefaults?.cylinderSizes || ['4kg', '9kg', '15kg', '45kg', '90kg', '190kg', '210kg', 'Other']
+      const supplierOptions = formDefaults?.gasSuppliers || ['SUPAGAS', 'ELGAS', 'ORIGIN', 'BWA Gas', 'BOC', 'Air Liquide', 'Other']
+      const vehicleOptions = formDefaults?.vehicleIds || ['BWA-01', 'BWA-02', 'BWA-03', 'BWA-04', 'BWA-05', 'BWA-06', 'BWA-07', 'BWA-08', 'BWA-TAS', 'Other']
+      const stateOptions = formDefaults?.stateOptions || [
+        { label: 'Victoria', value: 'VIC' },
+        { label: 'New South Wales', value: 'NSW' },
+        { label: 'Queensland', value: 'QLD' },
+        { label: 'Western Australia', value: 'WA' },
+        { label: 'South Australia', value: 'SA' },
+        { label: 'Tasmania', value: 'TAS' },
+        { label: 'Australian Capital Territory', value: 'ACT' },
+        { label: 'Northern Territory', value: 'NT' }
+      ]
       
-      const sizeOptions = (formDefaults?.cylinderSizes && Array.isArray(formDefaults.cylinderSizes) && formDefaults.cylinderSizes.length > 0)
-        ? formDefaults.cylinderSizes 
-        : ['4kg', '9kg', '15kg', '45kg', '90kg', '190kg', '210kg', 'Other']
-      
-      const supplierOptions = (formDefaults?.gasSuppliers && Array.isArray(formDefaults.gasSuppliers) && formDefaults.gasSuppliers.length > 0)
-        ? formDefaults.gasSuppliers 
-        : ['SUPAGAS', 'ELGAS', 'ORIGIN', 'BWA Gas', 'BOC', 'Air Liquide', 'Other']
-      
-      const vehicleOptions = (formDefaults?.vehicleIds && Array.isArray(formDefaults.vehicleIds) && formDefaults.vehicleIds.length > 0)
-        ? formDefaults.vehicleIds 
-        : ['BWA-01', 'BWA-02', 'BWA-03', 'BWA-04', 'BWA-05', 'BWA-06', 'BWA-07', 'BWA-08', 'BWA-TAS', 'Other']
-      
-      // Check if values are "Other" and need special handling
+      // Map values correctly with better error handling
       const reportGasType = (report.gas_type || '').toString().trim()
-      const gasType = gasTypeOptions.includes(reportGasType) ? reportGasType : (reportGasType ? 'Other' : 'LPG')
-      const gasTypeOther = !gasTypeOptions.includes(reportGasType) && reportGasType ? reportGasType : ''
-      
+      const gasType = gasTypeOptions.includes(reportGasType) ? reportGasType : 'Other'
+      const gasTypeOther = gasTypeOptions.includes(reportGasType) ? '' : reportGasType
+
       const reportSize = (report.size || '').toString().trim()
-      const size = sizeOptions.includes(reportSize) ? reportSize : (reportSize ? 'Other' : '')
-      const sizeOther = !sizeOptions.includes(reportSize) && reportSize ? reportSize : ''
-      
+      const size = sizeOptions.includes(reportSize) ? reportSize : 'Other'
+      const sizeOther = sizeOptions.includes(reportSize) ? '' : reportSize
+
       const reportSupplier = (report.gas_supplier || '').toString().trim()
-      const supplier = supplierOptions.includes(reportSupplier) ? reportSupplier : (reportSupplier ? 'Other' : '')
-      const supplierOther = !supplierOptions.includes(reportSupplier) && reportSupplier ? reportSupplier : ''
-      
+      const supplier = supplierOptions.includes(reportSupplier) ? reportSupplier : 'Other'
+      const supplierOther = supplierOptions.includes(reportSupplier) ? '' : reportSupplier
+
       const reportVehicleId = (report.vehicle_id || '').toString().trim()
-      const vehicleId = vehicleOptions.includes(reportVehicleId) ? reportVehicleId : (reportVehicleId ? 'Other' : '')
-      const vehicleIdOther = !vehicleOptions.includes(reportVehicleId) && reportVehicleId ? reportVehicleId : ''
+      const vehicleId = vehicleOptions.includes(reportVehicleId) ? reportVehicleId : 'Other'
+      const vehicleIdOther = vehicleOptions.includes(reportVehicleId) ? '' : reportVehicleId
+      
+      // Map state correctly
+      const reportState = (address.state || '').toString().trim()
+      const state = stateOptions.some(option => option.value === reportState) ? reportState : ''
+      
+      // Map testers correctly
+      const primaryTester = testers[0] || ''
+      const secondTester = testers[1] && testers[1].trim() !== '' ? testers[1] : 'none'
+      const thirdTester = testers[2] && testers[2].trim() !== '' ? testers[2] : 'none'
       
       console.log('Debug loading values:', {
         reportGasType, gasType, gasTypeOther,
         reportSize, size, sizeOther,
         reportSupplier, supplier, supplierOther,
         reportVehicleId, vehicleId, vehicleIdOther,
-        customerType, majorCustomerId
+        reportState, state,
+        customerType, majorCustomerId,
+        testers,
+        primaryTester, secondTester, thirdTester
       })
       
-             // Ensure at least one cylinder
-       const formattedCylinders = cylinders.length > 0 ? cylinders.map((cylinder: CylinderData) => ({
+      // Ensure at least one cylinder
+      const formattedCylinders = cylinders.length > 0 ? cylinders.map((cylinder: CylinderData) => ({
         cylinderNo: cylinder.cylinderNo || '',
         cylinderSpec: cylinder.cylinderSpec || '',
         wc: cylinder.wc || '',
@@ -341,7 +348,7 @@ export default function EditReportPage() {
         customerName: customerName || '',
         address: (address.street || '').toString(),
         suburb: (address.suburb || '').toString(),
-        state: (address.state || '').toString(),
+        state: state || '',
         postcode: (address.postcode || '').toString(),
         cylinder_gas_type: gasType || 'LPG',
         gasTypeOther: gasTypeOther || '',
@@ -353,17 +360,17 @@ export default function EditReportPage() {
         vehicleId: vehicleId || '',
         vehicleIdOther: vehicleIdOther || '',
         work_order: (report.work_order || '').toString(),
-        primaryTester: (testers[0] || '').toString(),
-        secondTester: (testers[1] && testers[1].trim() !== '') ? testers[1].toString() : 'none',
-        thirdTester: (testers[2] && testers[2].trim() !== '') ? testers[2].toString() : 'none',
+        primaryTester: primaryTester,
+        secondTester: secondTester,
+        thirdTester: thirdTester,
         // Office-only fields
         notes: (report.notes || '').toString(),
-        equipment_used: (report.equipment_used || '').toString(),
+        equipment_used: Array.isArray(report.equipment_used) ? report.equipment_used : [],
         images: Array.isArray(report.images) ? report.images : [],
         cylinders: formattedCylinders,
       })
     }
-  }, [report, form])
+  }, [report, formDefaults, form])
 
   const onSubmit = async (values: ReportFormData) => {
     try {
@@ -466,169 +473,172 @@ export default function EditReportPage() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-          {/* Customer Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Customer Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Customer Type Selection */}
-              <FormField
-                control={form.control}
-                name="customerType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Customer Type *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select customer type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="regular">Regular Customer</SelectItem>
-                        <SelectItem value="major">Major Customer</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* Customer Information and Gas Information - Side by Side */}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Customer Details - 3 columns */}
+            <div className="lg:col-span-3">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Customer Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Customer Type Selection */}
+                  <FormField
+                    control={form.control}
+                    name="customerType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Customer Type *</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select customer type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="other">Other/New</SelectItem>
+                            <SelectItem value="major">Major Customer</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              {/* Major Customer Dropdown */}
-              {customerType === 'major' && (
-                <FormField
-                  control={form.control}
-                  name="majorCustomer"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Major Customer *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                  {/* Major Customer Dropdown */}
+                  {customerType === 'major' && (
+                    <FormField
+                      control={form.control}
+                      name="majorCustomer"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Major Customer *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select major customer" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {majorCustomers.map((customer) => (
+                                <SelectItem key={customer.id} value={customer.id}>
+                                  {customer.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  {/* Customer Name */}
+                  <FormField
+                    control={form.control}
+                    name="customerName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {customerType === 'major' ? 'Additional Info (Optional)' : 'Customer Name *'}
+                        </FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select major customer" />
-                          </SelectTrigger>
+                          <Input
+                            placeholder={
+                              customerType === 'major'
+                                ? "Additional customer info (optional)"
+                                : "Enter customer name"
+                            }
+                            disabled={customerType === 'major' && !majorCustomer}
+                            autoComplete="organization"
+                            {...field}
+                          />
                         </FormControl>
-                        <SelectContent>
-                          {majorCustomers.map((customer) => (
-                            <SelectItem key={customer.id} value={customer.id}>
-                              {customer.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              {/* Customer Name */}
-              <FormField
-                control={form.control}
-                name="customerName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>
-                      {customerType === 'major' ? 'Additional Info (Optional)' : 'Customer Name *'}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder={
-                          customerType === 'major'
-                            ? "Additional customer info (optional)"
-                            : "Enter customer name"
-                        }
-                        disabled={customerType === 'major' && !majorCustomer}
-                        autoComplete="organization"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {/* Address Fields */}
-              <FormField
-                control={form.control}
-                name="address"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Address *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter street address" autoComplete="street-address" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name="suburb"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Suburb *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter suburb" autoComplete="address-level2" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="state"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>State *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                  {/* Address Fields */}
+                  <FormField
+                    control={form.control}
+                    name="address"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Address *</FormLabel>
                         <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select state" />
-                          </SelectTrigger>
+                          <Input placeholder="Enter street address" autoComplete="street-address" {...field} />
                         </FormControl>
-                                              <SelectContent>
-                        {(formDefaults?.stateOptions || []).map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="postcode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Postcode *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="4-digit postcode" autoComplete="postal-code" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="suburb"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Suburb *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Enter suburb" autoComplete="address-level2" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-          {/* Gas Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Gas Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="state"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>State *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select state" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {(formDefaults?.stateOptions || []).map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="postcode"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Postcode *</FormLabel>
+                          <FormControl>
+                            <Input placeholder="4-digit postcode" autoComplete="postal-code" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Gas Information - 1 column */}
+            <div className="lg:col-span-1">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Gas Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <FormField
                     control={form.control}
                     name="cylinder_gas_type"
@@ -668,9 +678,7 @@ export default function EditReportPage() {
                       )}
                     />
                   )}
-                </div>
 
-                <div className="space-y-4">
                   <FormField
                     control={form.control}
                     name="size"
@@ -710,9 +718,7 @@ export default function EditReportPage() {
                       )}
                     />
                   )}
-                </div>
 
-                <div className="space-y-4">
                   <FormField
                     control={form.control}
                     name="gas_supplier"
@@ -752,10 +758,10 @@ export default function EditReportPage() {
                       )}
                     />
                   )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
 
           {/* Report Details */}
           <Card>
@@ -763,7 +769,7 @@ export default function EditReportPage() {
               <CardTitle>Report Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <FormField
                   control={form.control}
                   name="test_date"
@@ -901,7 +907,7 @@ export default function EditReportPage() {
                       <Select 
                         onValueChange={field.onChange} 
                         value={field.value} 
-                        disabled={!secondTester}
+                        disabled={!secondTester || secondTester === 'none'}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -924,6 +930,7 @@ export default function EditReportPage() {
               </div>
             </CardContent>
           </Card>
+
 
           {/* Office Information */}
           <Card>
@@ -957,9 +964,9 @@ export default function EditReportPage() {
                   <FormItem>
                     <FormLabel>Equipment Used</FormLabel>
                     <FormControl>
-                      <Input 
-                        placeholder="Equipment or tools used during testing"
-                        {...field}
+                      <EquipmentMultiSelect
+                        value={field.value}
+                        onChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />
@@ -973,63 +980,27 @@ export default function EditReportPage() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Images</FormLabel>
+                    <div className="text-sm text-muted-foreground mb-2">
+                      Upload photos of findings or conditions (for office reference only)
+                    </div>
                     <FormControl>
-                      <div className="space-y-2">
-                        <div className="text-sm text-muted-foreground">
-                          Upload photos of findings or conditions (for office reference only)
-                        </div>
-                        <Input 
-                          type="file"
-                          multiple
-                          accept="image/*"
-                          onChange={async (e) => {
-                            const files = Array.from(e.target.files || [])
-                            if (files.length === 0) return
-
-                            try {
-                              const formData = new FormData()
-                              files.forEach(file => formData.append('images', file))
-
-                              const response = await fetch('/api/upload/images', {
-                                method: 'POST',
-                                body: formData
-                              })
-
-                              if (!response.ok) {
-                                throw new Error('Upload failed')
-                              }
-
-                              const result = await response.json()
-                              
-                              if (result.success) {
-                                // Store the file paths for database storage
-                                const filePaths = result.uploadedFiles.map((file: { filePath: string }) => file.filePath)
-                                field.onChange([...(field.value || []), ...filePaths])
-                                
-                                toast.success("Images uploaded", {
-                                  description: `${result.uploadedFiles.length} images uploaded successfully`
-                                })
-                                
-                                if (result.errors) {
-                                  toast.error("Some uploads failed", {
-                                    description: result.errors.join(', ')
-                                  })
-                                }
-                              }
-                            } catch (error) {
-                              console.error('Upload error:', error)
-                              toast.error("Upload failed", {
-                                description: "Failed to upload images. Please try again."
-                              })
-                            }
-                          }}
-                        />
-                        {field.value && field.value.length > 0 && (
-                          <div className="text-sm text-muted-foreground">
-                            {field.value.length} file(s) selected: {field.value.join(', ')}
-                          </div>
-                        )}
-                      </div>
+                      <MultiImageUpload
+                        value={field.value || []}
+                        onChange={field.onChange}
+                        maxFiles={10}
+                        maxSizeMB={10}
+                        onUploadStart={() => {
+                          toast.info("Uploading images...")
+                        }}
+                        onUploadComplete={(results) => {
+                          toast.success(`${results.length} images uploaded successfully`)
+                        }}
+                        onUploadError={(error) => {
+                          toast.error("Upload failed", {
+                            description: error,
+                          })
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

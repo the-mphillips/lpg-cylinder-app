@@ -12,7 +12,13 @@ interface ReportHeaderProps {
 }
 
 export function ReportHeader({ printMode = false }: ReportHeaderProps) {
-  const { data: settings = {} } = api.admin.getBrandingSettings.useQuery()
+  const { data: systemSettings = [] } = api.admin.getSystemSettings.useQuery()
+  
+  // Convert array of settings to object for easier access
+  const settings = systemSettings.reduce((acc: Record<string, unknown>, setting) => {
+    acc[setting.key] = setting.value
+    return acc
+  }, {})
 
   // Helper to safely parse JSON values
   const getSettingValue = (key: string, defaultValue: string = '') => {

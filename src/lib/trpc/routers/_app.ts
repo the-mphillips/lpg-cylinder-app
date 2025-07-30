@@ -5,6 +5,7 @@ import { usersRouter } from './users'
 import { dashboardRouter } from './dashboard'
 import { settingsRouter } from './settings'
 import { adminRouter } from './admin'
+import { equipmentRouter } from './equipment'
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
@@ -12,7 +13,8 @@ export const appRouter = createTRPCRouter({
   users: usersRouter,
   dashboard: dashboardRouter,
   settings: settingsRouter,
-  admin: adminRouter,
+    admin: adminRouter,
+  equipment: equipmentRouter,
 })
 
 export type AppRouter = typeof appRouter 

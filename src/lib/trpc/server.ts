@@ -127,7 +127,7 @@ const isAuthed = t.middleware(async ({ ctx, next }) => {
     throw new TRPCError({ code: 'UNAUTHORIZED' });
   }
 
-  // Get user profile from public users table by email using service role to bypass RLS
+  // Get user profile from public.users table by email, as IDs may not match auth.users
   const { data: userProfile, error: profileError } = await ctx.supabaseService
     .from('users')
     .select('*')

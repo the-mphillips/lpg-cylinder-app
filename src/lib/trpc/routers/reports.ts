@@ -1,4 +1,4 @@
-import { createTRPCRouter, authedProcedure } from '@/lib/trpc/server'
+import { createTRPCRouter, authedProcedure, adminProcedure } from '@/lib/trpc/server'
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { logUserActivity } from '@/lib/utils/unified-logging'
@@ -23,7 +23,7 @@ const baseReportSchema = z.object({
   status: z.enum(['draft', 'pending']).optional().default('pending'),
   // Office-only fields (not included in printed reports)
   notes: z.string().optional(),
-  equipment_used: z.string().optional(),
+  equipment_used: z.array(z.string()).optional(),
   images: z.array(z.string()).optional().default([]),
   // cylinder_data will be an array of objects
   cylinder_data: z.array(z.object({
@@ -58,7 +58,7 @@ const finalReportSchema = z.object({
   status: z.enum(['draft', 'pending']).optional().default('pending'),
   // Office-only fields (not included in printed reports)
   notes: z.string().optional(),
-  equipment_used: z.string().optional(),
+  equipment_used: z.array(z.string()).optional(),
   images: z.array(z.string()).optional().default([]),
   // cylinder_data will be an array of objects
   cylinder_data: z.array(z.object({
@@ -491,7 +491,7 @@ export const reportsRouter = createTRPCRouter({
   }),
 
   // Approve report
-  approve: authedProcedure
+  approve: adminProcedure
     .input(z.object({
       reportId: z.string(),
       signatoryName: z.string(),
@@ -553,7 +553,7 @@ export const reportsRouter = createTRPCRouter({
     }),
 
   // Unapprove report
-  unapprove: authedProcedure
+  unapprove: adminProcedure
     .input(z.object({
       reportId: z.string(),
       password: z.string().min(1, 'Password is required'),
@@ -651,7 +651,7 @@ export const reportsRouter = createTRPCRouter({
     }),
 
   // Delete report
-  delete: authedProcedure
+  delete: adminProcedure
     .input(z.object({
       reportId: z.string(),
       password: z.string(),
@@ -827,7 +827,7 @@ export const reportsRouter = createTRPCRouter({
     }),
 
   // Archive/Restore functionality
-  archiveReport: authedProcedure
+  archiveReport: adminProcedure
     .input(z.object({ 
       id: z.string(),
       reason: z.string().optional()
@@ -892,7 +892,7 @@ export const reportsRouter = createTRPCRouter({
       }
     }),
 
-  restoreReport: authedProcedure
+  restoreReport: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       try {
@@ -958,7 +958,7 @@ export const reportsRouter = createTRPCRouter({
       }
     }),
 
-  permanentlyDeleteReport: authedProcedure
+  permanentlyDeleteReport: adminProcedure
     .input(z.object({ 
       id: z.string(),
       adminPassword: z.string()
@@ -1053,67 +1053,67 @@ export const reportsRouter = createTRPCRouter({
       }
     }),
 
-  getArchivedReports: authedProcedure.query(async ({ ctx }) => {
-    try {
-      const { data: reports, error } = await ctx.supabaseService
-        .from('reports')
-        .select(`
-          id,
-          report_number,
-          customer,
-          status,
-          created_at,
-          deleted_at,
-          deleted_by,
-          test_date,
-          gas_type,
-          size,
-          vehicle_id,
-          work_order
-        `)
-        .not('deleted_at', 'is', null)
-        .order('deleted_at', { ascending: false });
-
-      if (error) {
+    getArchivedReports: adminProcedure.query(async ({ ctx }) => {
+      try {
+        const { data: reports, error } = await ctx.supabaseService
+          .from('reports')
+          .select(`
+            id,
+            report_number,
+            customer,
+            status,
+            created_at,
+            deleted_at,
+            deleted_by,
+            test_date,
+            gas_type,
+            size,
+            vehicle_id,
+            work_order
+          `)
+          .not('deleted_at', 'is', null)
+          .order('deleted_at', { ascending: false });
+  
+        if (error) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch archived reports',
+            cause: error,
+          });
+        }
+  
+        // Get user names for deleted_by field
+        const userIds = [...new Set(reports?.map(r => r.deleted_by).filter(Boolean))];
+        let users: Array<{ id: string; first_name: string; last_name: string }> = [];
+        
+        if (userIds.length > 0) {
+          const { data: usersData } = await ctx.supabaseService
+            .from('users')
+            .select('id, first_name, last_name')
+            .in('id', userIds);
+          users = usersData || [];
+        }
+  
+        const formattedReports = (reports || []).map(report => {
+          const deletedByUser = users.find(u => u.id === report.deleted_by);
+          return {
+            ...report,
+            deleted_by_name: deletedByUser 
+              ? `${deletedByUser.first_name} ${deletedByUser.last_name}`.trim() 
+              : 'Unknown User',
+            formatted_deleted_date: new Date(report.deleted_at).toLocaleDateString(),
+            formatted_created_date: new Date(report.created_at).toLocaleDateString(),
+          };
+        });
+  
+        return formattedReports;
+      } catch (error) {
+        console.error('Error fetching archived reports:', error);
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch archived reports',
-          cause: error,
         });
       }
-
-      // Get user names for deleted_by field
-      const userIds = [...new Set(reports?.map(r => r.deleted_by).filter(Boolean))];
-      let users: Array<{ id: string; first_name: string; last_name: string }> = [];
-      
-      if (userIds.length > 0) {
-        const { data: usersData } = await ctx.supabaseService
-          .from('users')
-          .select('id, first_name, last_name')
-          .in('id', userIds);
-        users = usersData || [];
-      }
-
-      const formattedReports = (reports || []).map(report => {
-        const deletedByUser = users.find(u => u.id === report.deleted_by);
-        return {
-          ...report,
-          deleted_by_name: deletedByUser 
-            ? `${deletedByUser.first_name} ${deletedByUser.last_name}`.trim() 
-            : 'Unknown User',
-          formatted_deleted_date: new Date(report.deleted_at).toLocaleDateString(),
-          formatted_created_date: new Date(report.created_at).toLocaleDateString(),
-        };
-      });
-
-      return formattedReports;
-    } catch (error) {
-      console.error('Error fetching archived reports:', error);
-      if (error instanceof TRPCError) throw error;
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to fetch archived reports',
-      });
-    }
-  }),
-}) 
+    }),
+  }) 

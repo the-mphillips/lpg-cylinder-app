@@ -33,7 +33,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { MultiImageUpload } from "@/components/ui/multi-image-upload"
-import { MultiSelectEquipment } from "@/components/ui/multi-select-equipment"
+import { EquipmentMultiSelect } from "@/components/ui/multi-select-combobox"
 // Simple toast replacement for now
 const useToast = () => ({
   toast: ({ title, description, variant }: { title: string; description: string; variant?: string }) => {
@@ -44,8 +44,7 @@ import { api } from "@/lib/trpc/client"
 import { Save, RotateCcw, Eye } from "lucide-react"
 import { CylinderDataForm } from "../components/cylinder-data-form"
 
-// Base schema with minimal validation for drafts
-const baseCylinderSchema = z.object({
+const cylinderSchema = z.object({
   cylinderNo: z.string().optional(),
   cylinderSpec: z.string().optional(),
   wc: z.string().optional(),
@@ -54,21 +53,9 @@ const baseCylinderSchema = z.object({
   barcode: z.string().optional(),
   remarks: z.string().optional(),
   recordedBy: z.string().optional(),
-})
+});
 
-const fullCylinderSchema = z.object({
-  cylinderNo: z.string().min(1, "Required"),
-  cylinderSpec: z.string().min(1, "Required"),
-  wc: z.string().min(1, "Required"),
-  extExam: z.enum(["PASS", "FAIL"], { errorMap: () => ({ message: "Must be PASS or FAIL" }) }),
-  intExam: z.enum(["PASS", "FAIL"], { errorMap: () => ({ message: "Must be PASS or FAIL" }) }),
-  barcode: z.string().min(1, "Required"),
-  remarks: z.string().optional(),
-  recordedBy: z.string().optional(),
-})
-
-// Draft schema with minimal validation
-const draftReportSchema = z.object({
+const reportBaseSchema = z.object({
   customerType: z.string().optional(),
   majorCustomer: z.string().optional(),
   customerName: z.string().optional(),
@@ -89,11 +76,10 @@ const draftReportSchema = z.object({
   primaryTester: z.string().optional(),
   secondTester: z.string().optional(),
   thirdTester: z.string().optional(),
-  // Office-only fields (not included in printed reports)
   notes: z.string().optional(),
   equipment_used: z.array(z.string()).optional().default([]),
   images: z.array(z.string()).optional().default([]),
-  cylinders: z.array(baseCylinderSchema).optional().default([{
+  cylinders: z.array(cylinderSchema).optional().default([{
     cylinderNo: '',
     cylinderSpec: '',
     wc: '',
@@ -103,42 +89,36 @@ const draftReportSchema = z.object({
     remarks: '',
     recordedBy: '',
   }]),
-})
+});
 
-// Full validation schema for final submission
-const finalReportSchema = z.object({
+const finalReportSchema = reportBaseSchema.extend({
   customerType: z.string().min(1, "Required"),
-  majorCustomer: z.string().optional(),
   customerName: z.string().min(1, "Required"),
   address: z.string().min(1, "Required"),
   suburb: z.string().min(1, "Required"),
   state: z.string().min(1, "Required"),
   postcode: z.string().min(4, "Required").regex(/^\d{4}$/, "Must be 4 digits"),
   cylinder_gas_type: z.string().min(1, "Required"),
-  gasTypeOther: z.string().optional(),
   size: z.string().min(1, "Required"),
-  sizeOther: z.string().optional(),
   gas_supplier: z.string().min(1, "Required"),
-  supplierOther: z.string().optional(),
   test_date: z.string().min(1, "Required"),
   vehicleId: z.string().min(1, "Required"),
-  vehicleIdOther: z.string().optional(),
   work_order: z.string().min(1, "Required"),
   primaryTester: z.string().min(1, "Required"),
-  secondTester: z.string().optional(),
-  thirdTester: z.string().optional(),
-  // Office-only fields (not included in printed reports)
-  notes: z.string().optional(),
-  equipment_used: z.array(z.string()).optional().default([]),
-  images: z.array(z.string()).optional().default([]),
-  cylinders: z.array(fullCylinderSchema).min(1, "At least one cylinder is required")
+  cylinders: z.array(
+    cylinderSchema.extend({
+      cylinderNo: z.string().min(1, "Required"),
+      cylinderSpec: z.string().min(1, "Required"),
+      wc: z.string().min(1, "Required"),
+      extExam: z.enum(["PASS", "FAIL"]),
+      intExam: z.enum(["PASS", "FAIL"]),
+      barcode: z.string().min(1, "Required"),
+    })
+  ).min(1, "At least one cylinder is required")
    .max(25, "Maximum of 25 cylinders allowed per report (fits on 1 A4 page)"),
-})
+});
 
-// Dynamic schema based on whether it's a draft or final submission
-const reportSchema = draftReportSchema // Default to draft validation
-
-type ReportFormData = z.infer<typeof reportSchema>
+type ReportFormData = z.infer<typeof finalReportSchema>;
 
 // Simple debounce function with cancel method
 const debounce = (func: (values: ReportFormData) => void, delay: number) => {
@@ -160,6 +140,7 @@ export default function NewReportPage() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [previewData, setPreviewData] = useState<ReportFormData | null>(null)
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false)
+  const [isDraft, setIsDraft] = useState(false);
 
   // Check for duplicate parameter
   const duplicateReportId = searchParams.get('duplicate')
@@ -198,7 +179,7 @@ export default function NewReportPage() {
 
   // Initialize form with default values
   const form = useForm<ReportFormData>({
-    resolver: zodResolver(reportSchema),
+    resolver: zodResolver(isDraft ? reportBaseSchema : finalReportSchema),
     defaultValues: {
       customerType: '',
       majorCustomer: '',
@@ -222,7 +203,7 @@ export default function NewReportPage() {
       thirdTester: '',
       // Office-only fields
       notes: '',
-      equipment_used: '',
+      equipment_used: [],
       images: [],
       cylinders: [{
         cylinderNo: '',
@@ -235,7 +216,12 @@ export default function NewReportPage() {
         recordedBy: '',
       }],
     },
-  })
+  });
+
+  // Re-validate form when switching between draft and final
+  useEffect(() => {
+    form.trigger();
+  }, [isDraft, form]);
 
   // Auto-save functionality
   const debouncedSave = useMemo(
@@ -313,9 +299,13 @@ export default function NewReportPage() {
             thirdTester: testers[2] || '',
             // Office-only fields (start fresh for duplicates)
             notes: '',
-            equipment_used: '',
+            equipment_used: [],
             images: [],
-            cylinders: cylinders.length > 0 ? cylinders : [{
+            cylinders: cylinders.length > 0 ? cylinders.map(c => ({
+              ...c, 
+              extExam: (c.extExam === "PASS" || c.extExam === "FAIL") ? c.extExam : 'PASS', 
+              intExam: (c.intExam === "PASS" || c.intExam === "FAIL") ? c.intExam : 'PASS'
+            })) : [{
               cylinderNo: '',
               cylinderSpec: '',
               wc: '',
@@ -431,11 +421,12 @@ export default function NewReportPage() {
         work_order: values.work_order,
         major_customer_id: values.customerType === 'major' ? values.majorCustomer : undefined,
         cylinder_data: values.cylinders || [],
+        equipment_used: values.equipment_used || [],
+        notes: values.notes || '',
+        images: values.images || [],
       }
 
-      const reportData = isDraft 
-        ? { ...baseData, status: 'draft' as const }
-        : { ...baseData, status: 'pending' as const }
+      const reportData = { ...baseData, status: isDraft ? 'draft' : 'pending' } as const
 
       await createReportMutation.mutateAsync(reportData)
       
@@ -458,8 +449,14 @@ export default function NewReportPage() {
   }
 
   const handleSaveAsDraft = () => {
-    submitReport(form.getValues(), true)
-  }
+    setIsDraft(true);
+    form.handleSubmit((values) => submitReport(values, true))();
+  };
+
+  const handleFinalSubmit = () => {
+    setIsDraft(false);
+    form.handleSubmit(onSubmit)();
+  };
 
   const handleReset = () => {
     // Temporarily disable auto-save during reset
@@ -490,7 +487,7 @@ export default function NewReportPage() {
       thirdTester: '',
       // Office-only fields
       notes: '',
-      equipment_used: '',
+      equipment_used: [],
       images: [],
       cylinders: [{
         cylinderNo: '',
@@ -1075,9 +1072,9 @@ export default function NewReportPage() {
                   <FormItem>
                     <FormLabel>Equipment Used</FormLabel>
                     <FormControl>
-                      <Input 
-                        placeholder="Equipment or tools used during testing"
-                        {...field}
+                      <EquipmentMultiSelect
+                        value={field.value}
+                        onChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />
@@ -1166,7 +1163,8 @@ export default function NewReportPage() {
               </Button>
               
               <Button
-                type="submit"
+                type="button"
+                onClick={handleFinalSubmit}
                 disabled={createReportMutation.status === 'pending'}
                 className="gap-2"
               >
