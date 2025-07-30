@@ -417,6 +417,47 @@ export const adminRouter = createTRPCRouter({
       return data
     }),
 
+  // All App Settings Management
+  getAllAppSettings: adminProcedure.query(async ({ ctx }) => {
+    const { data, error } = await ctx.supabaseService
+      .from('app_settings')
+      .select('*')
+      .order('category, key')
+
+    if (error) {
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+    }
+
+    return data
+  }),
+
+  updateAppSetting: adminProcedure
+    .input(z.object({
+      key: z.string(),
+      value: z.string(),
+      description: z.string().optional(),
+      category: z.string(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const { data, error } = await ctx.supabaseService
+        .from('app_settings')
+        .upsert({
+          key: input.key,
+          value: input.value,
+          description: input.description,
+          category: input.category,
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single()
+
+      if (error) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: error.message })
+      }
+
+      return data
+    }),
+
   // System Settings Management
   getSystemSettings: adminProcedure.query(async ({ ctx }) => {
     const { data, error } = await ctx.supabaseService
@@ -508,7 +549,7 @@ export const adminRouter = createTRPCRouter({
     }))
     .query(async ({ input, ctx }) => {
       let query = ctx.supabaseService
-        .from('audit_logs')
+        .from('unified_logs_with_user_info')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(input.limit)

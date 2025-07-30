@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'zeutqasvnvbigebcwjfo.supabase.co',
         port: '',
-        pathname: '/storage/v1/object/public/**',
+        pathname: '/storage/v1/object/**',
       },
       // Add pattern for any Supabase project URL from environment
       ...(process.env.NEXT_PUBLIC_SUPABASE_URL 
@@ -22,7 +22,7 @@ const nextConfig: NextConfig = {
             protocol: 'https' as const,
             hostname: new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname,
             port: '',
-            pathname: '/storage/v1/object/public/**',
+            pathname: '/storage/v1/object/**',
           }]
         : []
       ),

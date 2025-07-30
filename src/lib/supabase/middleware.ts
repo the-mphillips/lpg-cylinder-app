@@ -37,6 +37,11 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
+  // Handle API routes - just update session, don't redirect
+  if (pathname.startsWith('/api/')) {
+    return supabaseResponse
+  }
+
   // Protected routes that require authentication
   const protectedRoutes = ['/dashboard', '/reports', '/settings']
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))

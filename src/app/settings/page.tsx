@@ -36,8 +36,22 @@ function SignatureImage({ signaturePath, alt }: { signaturePath?: string, alt: s
     async function loadSignatureUrl() {
       if (signaturePath) {
         try {
-          const url = await buildSignatureUrl(signaturePath)
-          setSrc(url)
+          // Get signed URL from API route
+          const response = await fetch('/api/signature/url', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ signaturePath }),
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            setSrc(data.url)
+          } else {
+            console.error('Error loading signature URL:', response.statusText)
+            setSrc('')
+          }
         } catch (error) {
           console.error('Error loading signature:', error)
           setSrc('')
@@ -86,27 +100,24 @@ function getRoleColor(role: string): string {
 
 // App Settings Tab with edit mode functionality
 function AppSettingsTab() {
-  const { data: systemSettings, isLoading: systemLoading } = api.admin.getSystemSettings.useQuery()
-  const { data: securitySettings, isLoading: securityLoading } = api.admin.getSecuritySettings.useQuery()
-  const updateSystemSetting = api.admin.updateSystemSetting.useMutation()
-  const updateSecuritySetting = api.admin.updateSecuritySetting.useMutation()
+  const { data: allSettings, isLoading: settingsLoading } = api.admin.getAllAppSettings.useQuery()
+  const updateSetting = api.admin.updateAppSetting.useMutation()
   const [editingSettings, setEditingSettings] = useState<Record<string, unknown>>({})
   const [editingCategories, setEditingCategories] = useState<Record<string, boolean>>({})
 
-  // Combine settings from different categories
-  const allSettings = [
-    ...(systemSettings || []),
-    ...(securitySettings || [])
-  ]
-
   // Group settings by category
-  const settingsByCategory: Record<string, (RouterOutputs["admin"]["getSystemSettings"][number] | RouterOutputs["admin"]["getSecuritySettings"][number])[]> = {}
-  allSettings.forEach((setting) => {
+  const settingsByCategory: Record<string, RouterOutputs["admin"]["getAllAppSettings"][number][]> = {}
+  allSettings?.forEach((setting) => {
     if (!settingsByCategory[setting.category]) {
       settingsByCategory[setting.category] = []
     }
     settingsByCategory[setting.category].push(setting)
   })
+
+  // Debug logging
+  console.log('AppSettingsTab - allSettings:', allSettings)
+  console.log('AppSettingsTab - settingsByCategory:', settingsByCategory)
+  console.log('AppSettingsTab - categories count:', Object.keys(settingsByCategory).length)
 
   const handleSettingChange = (id: string, value: unknown) => {
     setEditingSettings(prev => ({ ...prev, [id]: value }))
@@ -117,11 +128,11 @@ function AppSettingsTab() {
     const promises = categorySettings
       .filter(setting => editingSettings[setting.id] !== undefined)
       .map(setting => {
-        const updateFunction = category === 'system' ? updateSystemSetting : updateSecuritySetting
-        return updateFunction.mutateAsync({
+        return updateSetting.mutateAsync({
           key: setting.key,
           value: String(editingSettings[setting.id]),
-          description: setting.description
+          description: setting.description,
+          category: setting.category
         })
       })
 
@@ -159,7 +170,7 @@ function AppSettingsTab() {
     setEditingCategories(prev => ({ ...prev, [category]: true }))
   }
 
-  const renderSettingDisplay = (setting: RouterOutputs["admin"]["getSystemSettings"][number] | RouterOutputs["admin"]["getSecuritySettings"][number], isEditing: boolean) => {
+  const renderSettingDisplay = (setting: RouterOutputs["admin"]["getAllAppSettings"][number], isEditing: boolean) => {
     const currentValue = editingSettings[setting.id] !== undefined 
       ? editingSettings[setting.id] 
       : setting.value
@@ -230,7 +241,7 @@ function AppSettingsTab() {
     )
   }
 
-  if (systemLoading || securityLoading) return <div className="p-4">Loading app settings...</div>
+  if (settingsLoading) return <div className="p-4">Loading app settings...</div>
 
   return (
     <div className="space-y-6">

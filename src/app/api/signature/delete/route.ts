@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/service'
-import { createServerClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,26 +13,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Extract userId from signature path (format: signatures/userId-timestamp-filename)
-    const pathParts = signaturePath.split('/')
-    const filename = pathParts[pathParts.length - 1]
-    const userId = filename.split('-')[0]
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Could not extract userId from signature path' },
-        { status: 400 }
-      )
-    }
-
     // Verify user is authenticated using server client
-    const supabase = createServerClient()
+    const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
+      )
+    }
+
+    // Extract userId from signature path (format: signatures/userId-timestamp-filename)
+    const pathParts = signaturePath.split('/')
+    const filename = pathParts[pathParts.length - 1]
+    
+    // Split by '-' and get the UUID part (first 5 segments for UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+    const filenameParts = filename.split('-')
+    if (filenameParts.length < 6) {
+      return NextResponse.json(
+        { error: 'Invalid signature filename format' },
+        { status: 400 }
+      )
+    }
+    
+    // Reconstruct the full UUID (first 5 parts)
+    const userId = filenameParts.slice(0, 5).join('-')
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Could not extract userId from signature path' },
+        { status: 400 }
       )
     }
 
@@ -60,16 +71,20 @@ export async function POST(request: NextRequest) {
       .eq('id', userId)
 
     if (updateError) {
-      console.error('Error updating user signature:', updateError)
+      console.error('Error updating user record:', updateError)
       return NextResponse.json(
-        { error: 'Failed to update user signature' },
+        { error: 'Failed to update user record' },
         { status: 500 }
       )
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ 
+      success: true,
+      message: 'Signature deleted successfully'
+    })
+
   } catch (error) {
-    console.error('Signature deletion error:', error)
+    console.error('Error in signature deletion:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

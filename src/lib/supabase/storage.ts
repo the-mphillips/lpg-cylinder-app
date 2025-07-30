@@ -245,11 +245,11 @@ export async function getSignedUrl(bucket: string, path: string, expiresIn: numb
 /**
  * Build full public URL for signature files
  */
-export async function buildSignatureUrl(signaturePath: string): Promise<string> {
+export function buildSignatureUrl(signaturePath: string): string {
   if (!signaturePath) {
     return ''
   }
-  
+
   // If it's already a full URL, return as is
   if (signaturePath.startsWith('http')) {
     return signaturePath
@@ -261,14 +261,8 @@ export async function buildSignatureUrl(signaturePath: string): Promise<string> 
   // If the path doesn't start with 'signatures/', prepend it
   const fullPath = cleanPath.startsWith('signatures/') ? cleanPath : `signatures/${cleanPath}`
   
-  // For user-data bucket, we need to use signed URLs since it's not public
-  try {
-    const signedUrl = await getSignedUrl('user-data', fullPath, 3600)
-    return signedUrl || ''
-  } catch (error) {
-    console.error('Error getting signed URL for signature:', error)
-    return ''
-  }
+  // For now, return the path - we'll handle signed URLs via API route
+  return fullPath
 }
 
 /**

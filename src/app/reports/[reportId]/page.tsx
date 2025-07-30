@@ -51,6 +51,7 @@ export default function ViewReportPage() {
   const { data: report, isLoading, error } = api.reports.getById.useQuery({ id: reportId })
   const { data: currentUser } = api.auth.getCurrentUser.useQuery()
   const { data: signatories = [] } = api.admin.getSignatories.useQuery()
+  const { data: equipment = [] } = api.equipment.list.useQuery()
   const utils = api.useUtils()
 
   // Mutations
@@ -269,6 +270,21 @@ export default function ViewReportPage() {
     return status === 'submitted' ? 'Pending' : status.charAt(0).toUpperCase() + status.slice(1)
   }
 
+  // Helper function to get equipment name by ID
+  const getEquipmentName = (equipmentId: string) => {
+    const equipmentItem = equipment.find(eq => eq.id === equipmentId)
+    return equipmentItem?.name || equipmentId
+  }
+
+  // Helper function to create image URL
+  const getImageUrl = (imageName: string) => {
+    // Images are stored in the app-data bucket under reports/images/
+    // Construct the public URL for Supabase storage
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const bucketName = 'app-data'
+    return `${supabaseUrl}/storage/v1/object/public/${bucketName}/reports/images/${imageName}`
+  }
+
   return (
     <div className="container mx-auto p-4 max-w-7xl space-y-6">
       {/* Header */}
@@ -474,8 +490,19 @@ export default function ViewReportPage() {
           />
           <InfoItem 
             label="Equipment Used" 
-            value={report.equipment_used && typeof report.equipment_used === 'string' && report.equipment_used.trim() ? (
-              report.equipment_used
+            value={Array.isArray(report.equipment_used) && report.equipment_used.length > 0 ? (
+              <div className="space-y-2">
+                <span className="text-sm text-muted-foreground">
+                  {report.equipment_used.length} equipment item(s) used
+                </span>
+                <div className="grid grid-cols-1 gap-1">
+                  {report.equipment_used.map((equipmentId: string, index: number) => (
+                    <div key={index} className="text-sm bg-muted px-2 py-1 rounded">
+                      {getEquipmentName(equipmentId)}
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               <span className="text-gray-500 italic">Not specified</span>
             )} 
@@ -489,8 +516,18 @@ export default function ViewReportPage() {
                 </span>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {report.images.map((imageName: string, index: number) => (
-                    <div key={index} className="text-sm bg-muted px-2 py-1 rounded truncate">
-                      {imageName}
+                    <div key={index} className="relative group">
+                      <img 
+                        src={getImageUrl(imageName)}
+                        alt={`Report image ${index + 1}`}
+                        className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => window.open(getImageUrl(imageName), '_blank')}
+                      />
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all rounded flex items-center justify-center">
+                        <span className="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                          Click to view
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>

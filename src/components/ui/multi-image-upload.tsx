@@ -11,6 +11,7 @@ interface UploadedImage {
   originalName: string
   size: number
   preview?: string
+  publicUrl?: string
 }
 
 interface MultiImageUploadProps {
@@ -170,8 +171,21 @@ export function MultiImageUpload({
       return previews[previewKey]
     }
     
-    // For uploaded files, construct the public URL
-    // This assumes the files are stored in Supabase storage
+    // If it's already a full URL (public URL from Supabase), return as is
+    if (filePath.startsWith('http')) {
+      return filePath
+    }
+    
+    // For uploaded files, construct the public URL from Supabase storage
+    // The filePath should be the full path in the storage bucket
+    if (filePath.startsWith('reports/images/')) {
+      // Construct the public URL for Supabase storage
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+      const bucketName = 'app-data'
+      return `${supabaseUrl}/storage/v1/object/public/${bucketName}/${filePath}`
+    }
+    
+    // Fallback to API route for other cases
     return `/api/images/${filePath.split('/').pop()}`
   }
 

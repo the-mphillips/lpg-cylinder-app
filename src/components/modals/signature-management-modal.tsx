@@ -56,8 +56,27 @@ export function SignatureManagementModal({
   useEffect(() => {
     async function loadSignatureUrl() {
       if (user?.signature) {
-        const url = await buildSignatureUrl(user.signature)
-        setSignatureUrl(url)
+        try {
+          // Get signed URL from API route
+          const response = await fetch('/api/signature/url', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ signaturePath: user.signature }),
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            setSignatureUrl(data.url)
+          } else {
+            console.error('Error loading signature URL:', response.statusText)
+            setSignatureUrl(null)
+          }
+        } catch (error) {
+          console.error('Error loading signature:', error)
+          setSignatureUrl(null)
+        }
       } else {
         setSignatureUrl(null)
       }
@@ -137,8 +156,22 @@ export function SignatureManagementModal({
         
         // Reload signature display
         if (result.path) {
-          const url = await buildSignatureUrl(result.path)
-          setSignatureUrl(url)
+          try {
+            const response = await fetch('/api/signature/url', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ signaturePath: result.path }),
+            })
+            
+            if (response.ok) {
+              const data = await response.json()
+              setSignatureUrl(data.url)
+            }
+          } catch (error) {
+            console.error('Error reloading signature:', error)
+          }
         }
       } else {
         setMessage({ type: 'error', text: result.error || 'Upload failed' })
