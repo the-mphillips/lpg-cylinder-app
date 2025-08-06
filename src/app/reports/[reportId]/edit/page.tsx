@@ -418,15 +418,25 @@ export default function EditReportPage() {
     setIsPreviewOpen(true)
   }
 
+  // Watch form values for conditional rendering
+  const customerType = form.watch('customerType')
+  const majorCustomer = form.watch('majorCustomer')
+  const cylinder_gas_type = form.watch('cylinder_gas_type')
+  const size = form.watch('size')
+  const gas_supplier = form.watch('gas_supplier')
+  const vehicleId = form.watch('vehicleId')
+  const primaryTester = form.watch('primaryTester')
+  const secondTester = form.watch('secondTester')
+
   // Filter testers to avoid duplicates (must be before conditional returns)
   const availableSecondTesters = useMemo(() => 
-    testers.filter(tester => tester.name !== form.watch('primaryTester')), 
-    [testers, form.watch('primaryTester')]
+    testers.filter(tester => tester.name !== primaryTester), 
+    [testers, primaryTester]
   )
   
   const availableThirdTesters = useMemo(() => 
-    testers.filter(tester => tester.name !== form.watch('primaryTester') && tester.name !== form.watch('secondTester')), 
-    [testers, form.watch('primaryTester'), form.watch('secondTester')]
+    testers.filter(tester => tester.name !== primaryTester && tester.name !== secondTester), 
+    [testers, primaryTester, secondTester]
   )
 
   if (isLoading) {
@@ -448,16 +458,6 @@ export default function EditReportPage() {
       </div>
     )
   }
-
-  // Watch form values for conditional rendering
-  const customerType = form.watch('customerType')
-  const majorCustomer = form.watch('majorCustomer')
-  const cylinder_gas_type = form.watch('cylinder_gas_type')
-  const size = form.watch('size')
-  const gas_supplier = form.watch('gas_supplier')
-  const vehicleId = form.watch('vehicleId')
-  const primaryTester = form.watch('primaryTester')
-  const secondTester = form.watch('secondTester')
 
   return (
     <div className="container mx-auto p-4 max-w-6xl">

@@ -44,8 +44,8 @@ async function logToAuditTable(
     action?: ActivityAction
     resource_type?: string | null
     resource_id?: string | null
-    details?: Record<string, any> | null
-    error_details?: Record<string, any> | null
+    details?: Record<string, unknown> | null
+    error_details?: Record<string, unknown> | null
     email_to?: string[]
     email_subject?: string
     email_status?: string
@@ -100,7 +100,7 @@ export async function logSystemEvent(
   message: string,
   module?: string,
   functionName?: string,
-  errorDetails?: Record<string, any>
+  errorDetails?: Record<string, unknown>
 ): Promise<void> {
   await logToAuditTable('system', level, message, {
     module,
@@ -179,7 +179,7 @@ export async function logEmailEvent(
   recipients: string[],
   status: 'sent' | 'failed' | 'pending',
   userId?: string,
-  errorDetails?: Record<string, any>
+  errorDetails?: Record<string, unknown>
 ): Promise<void> {
   const level: LogLevel = status === 'failed' ? 'ERROR' : 'INFO'
   const message = `Email ${status}: ${subject} to ${recipients.length} recipient(s)`
@@ -243,7 +243,7 @@ export async function logSecurityEvent(
   level: LogLevel,
   message: string,
   userId?: string,
-  details?: Record<string, any>,
+  details?: Record<string, unknown>,
   request?: Request
 ): Promise<void> {
   const ip_address = request ? 

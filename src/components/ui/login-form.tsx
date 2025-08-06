@@ -7,8 +7,6 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { api } from '@/lib/trpc/client'
 import { isEmail } from '@/lib/auth/login-helpers'
-import { storeSession } from '@/lib/auth/session'
-import type { User } from '@/lib/types/database'
 
 interface LoginFormProps {
   onSuccess?: () => void
@@ -22,13 +20,8 @@ export function LoginForm({ onSuccess, className }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false)
 
   const loginMutation = api.auth.login.useMutation({
-    onSuccess: (data: { success: boolean; user: User }) => {
+    onSuccess: () => {
       setError('')
-      
-      // Store the session in localStorage
-      if (data.user) {
-        storeSession(data.user)
-      }
       
       // Call success callback
       onSuccess?.()

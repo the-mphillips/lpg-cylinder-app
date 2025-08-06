@@ -25,7 +25,7 @@ import { BrandingSettingsTab } from '@/components/branding-settings-tab'
 import { EquipmentSettingsTab } from '@/components/equipment-settings-tab'
 
 import { UnifiedLogsTable } from '@/components/ui/unified-logs-table'
-import { buildSignatureUrl } from '@/lib/supabase/storage'
+import Image from 'next/image'
 
 // Component to handle async signature URL loading
 function SignatureImage({ signaturePath, alt }: { signaturePath?: string, alt: string }) {
@@ -73,9 +73,11 @@ function SignatureImage({ signaturePath, alt }: { signaturePath?: string, alt: s
   }
 
   return (
-    <img
+    <Image
       src={src}
       alt={alt}
+      width={200}
+      height={100}
       className="w-full h-full object-contain"
     />
   )

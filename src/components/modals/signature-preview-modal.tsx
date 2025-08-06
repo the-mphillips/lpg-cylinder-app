@@ -8,6 +8,7 @@ import { FileUpload } from '@/components/ui/file-upload'
 import { Trash2, Upload, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import { deleteFile, type UploadResult } from '@/lib/supabase/storage'
+import Image from 'next/image'
 
 interface SignaturePreviewModalProps {
   isOpen: boolean
@@ -79,9 +80,11 @@ export function SignaturePreviewModal({ isOpen, onClose, user, onSignatureUpdate
             {user.signature ? (
               <div className="flex flex-col items-center space-y-4">
                 <div className="border rounded bg-white p-4 max-w-md">
-                  <img 
+                  <Image 
                     src={user.signature} 
                     alt={`${user.name}'s signature`}
+                    width={300}
+                    height={128}
                     className="max-h-32 max-w-full object-contain"
                   />
                 </div>

@@ -6,6 +6,12 @@ import type { User, UserInsert } from '@/lib/types/database'
 
 const supabase = createClient()
 
+// Simple email validation function
+export function isEmail(email: string): boolean {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
 export async function isUsernameAvailable(username: string, excludeUserId?: string): Promise<boolean> {
   let query = supabase.from('users').select('id').eq('username', username)
   if (excludeUserId) {

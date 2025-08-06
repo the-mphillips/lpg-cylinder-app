@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { X, Upload, Image as ImageIcon, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import Image from 'next/image'
 
 interface UploadedImage {
   filePath: string
@@ -238,9 +239,11 @@ export function MultiImageUpload({
             <Card key={filePath} className="relative group">
               <CardContent className="p-2">
                 <div className="aspect-square relative rounded-md overflow-hidden bg-gray-100">
-                  <img
+                  <Image
                     src={getImageSrc(filePath)}
                     alt={`Upload ${index + 1}`}
+                    width={200}
+                    height={200}
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       // Fallback if image fails to load

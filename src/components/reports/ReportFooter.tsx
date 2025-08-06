@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { cn } from '@/lib/utils'
+import Image from 'next/image'
 
 interface ReportFooterProps {
   date: string
@@ -79,9 +80,11 @@ export function ReportFooter({
         {/* Row 2, Column 3: Signature - absolutely positioned to align with text baseline */}
         <div className="relative">
           {signatureFile ? (
-            <img
+            <Image
               src={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/user-data/${signatureFile}`}
               alt="Authorized Signatory's signature"
+              width={150}
+              height={50}
               className={cn(
                 "max-w-[150px] max-h-[50px] object-contain absolute bottom-0 left-0",
                 printMode && "print:block"

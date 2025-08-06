@@ -18,6 +18,7 @@ import { MoreVertical, Edit, Check, Download, Trash2, ArrowLeft, Archive, X, Fil
 import { toast } from "sonner"
 import { ReportPDFModal } from '@/components/reports/ReportPDFModal'
 import { ReportData } from '@/components/reports/ReportPreview'
+import Image from 'next/image'
 
 interface CylinderData {
   cylinderNo: string
@@ -517,9 +518,11 @@ export default function ViewReportPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {report.images.map((imageName: string, index: number) => (
                     <div key={index} className="relative group">
-                      <img 
+                      <Image 
                         src={getImageUrl(imageName)}
                         alt={`Report image ${index + 1}`}
+                        width={96}
+                        height={96}
                         className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => window.open(getImageUrl(imageName), '_blank')}
                       />
@@ -554,9 +557,11 @@ export default function ViewReportPage() {
                 {report.approved_signatory_signature && (
                   <div>
                     <Label className="text-sm font-medium text-gray-600">Signature</Label>
-                    <img 
+                    <Image 
                       src={`/api/signatures/${report.approved_signatory_signature}`} 
                       alt="Authorized Signatory's signature" 
+                      width={150}
+                      height={75}
                       className="max-w-[150px] border rounded mt-1"
                     />
                   </div>

@@ -29,11 +29,11 @@ interface CylinderData {
   cylinderNo: string
   cylinderSpec: string
   wc: string
-  extExam: string
-  intExam: string
+  extExam: 'PASS' | 'FAIL'
+  intExam: 'PASS' | 'FAIL'
   barcode: string
-  remarks: string
-  recordedBy: string
+  remarks?: string
+  recordedBy?: string
 }
 
 interface ReportFormData {
@@ -45,11 +45,17 @@ interface ReportFormData {
     postcode: string
   }
   gas_type: string
-  cylinder_spec: string
+  gas_supplier?: string
+  size: string
   test_date: string
   tester_names: string[]
   vehicle_id: string
   work_order?: string
+  major_customer_id?: string
+  status: 'draft' | 'pending'
+  notes?: string
+  equipment_used?: string[]
+  images?: string[]
   cylinder_data: CylinderData[]
 }
 
@@ -94,11 +100,17 @@ export function UnifiedReportForm({
       postcode: ''
     },
     gas_type: '',
-    cylinder_spec: '',
+    gas_supplier: '',
+    size: '',
     test_date: new Date().toISOString().split('T')[0],
     tester_names: [],
     vehicle_id: '',
     work_order: '',
+    major_customer_id: '',
+    status: 'draft',
+    notes: '',
+    equipment_used: [],
+    images: [],
     cylinder_data: [{
       cylinderNo: '1',
       cylinderSpec: '',
@@ -160,13 +172,19 @@ export function UnifiedReportForm({
               postcode: ''
             },
         gas_type: existingReport.gas_type || '',
-        cylinder_spec: existingReport.cylinder_spec || '',
+        gas_supplier: existingReport.gas_supplier || '',
+        size: existingReport.size || '',
         test_date: existingReport.test_date || new Date().toISOString().split('T')[0],
         tester_names: Array.isArray(existingReport.tester_names) 
           ? existingReport.tester_names 
           : [],
         vehicle_id: existingReport.vehicle_id || '',
         work_order: existingReport.work_order || '',
+        major_customer_id: existingReport.major_customer_id || '',
+        status: existingReport.status || 'draft',
+        notes: existingReport.notes || '',
+        equipment_used: Array.isArray(existingReport.equipment_used) ? existingReport.equipment_used : [],
+        images: Array.isArray(existingReport.images) ? existingReport.images : [],
         cylinder_data: Array.isArray(existingReport.cylinder_data) 
           ? existingReport.cylinder_data 
           : [{
@@ -274,11 +292,15 @@ export function UnifiedReportForm({
     }
     
     if (mode === 'create') {
-      createReportMutation.mutate(formData)
+      createReportMutation.mutate({
+        ...formData,
+        status: 'pending'
+      })
     } else if (mode === 'edit' && reportId) {
       updateReportMutation.mutate({
         id: reportId,
-        data: formData
+        ...formData,
+        status: 'pending'
       })
     }
   }
@@ -453,10 +475,10 @@ export function UnifiedReportForm({
                 </Select>
               </div>
               <div>
-                <Label htmlFor="cylinder_spec">Cylinder Size</Label>
-                <Select 
-                  value={formData.cylinder_spec} 
-                  onValueChange={(value) => handleInputChange('cylinder_spec', value)}
+                                <Label htmlFor="size">Cylinder Size</Label>
+                <Select
+                  value={formData.size}
+                  onValueChange={(value) => handleInputChange('size', value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select cylinder size" />

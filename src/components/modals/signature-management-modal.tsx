@@ -21,7 +21,7 @@ import {
   Download,
   RefreshCw
 } from 'lucide-react'
-import { uploadUserSignature, deleteFile, buildSignatureUrl } from '@/lib/supabase/storage'
+import { uploadUserSignature, deleteFile } from '@/lib/supabase/storage'
 import Image from 'next/image'
 
 interface SignatureModalProps {

@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Edit, Upload, Trash2 } from 'lucide-react'
 import { api } from '@/lib/trpc/client'
 import { toast } from 'sonner'
+import Image from 'next/image'
 
 const defaultAddress = { street: '', city: '', state: '', postcode: '', country: '' }
 const defaultContact = { phone: '', email: '', website: '' }
@@ -636,9 +637,11 @@ export function BrandingSettingsTab() {
               <div className="relative group">
                 {visualSettings.logo_light_url ? (
                   <div className="relative border rounded-lg p-4 bg-white">
-                    <img
+                    <Image
                       src={visualSettings.logo_light_url}
                       alt="Light logo"
+                      width={200}
+                      height={64}
                       className="h-16 w-auto mx-auto object-contain"
                     />
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-lg">
@@ -679,9 +682,11 @@ export function BrandingSettingsTab() {
               <div className="relative group">
                 {visualSettings.logo_dark_url ? (
                   <div className="relative border rounded-lg p-4 bg-gray-900">
-                    <img
+                    <Image
                       src={visualSettings.logo_dark_url}
                       alt="Dark logo"
+                      width={200}
+                      height={64}
                       className="h-16 w-auto mx-auto object-contain"
                     />
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-lg">
@@ -724,9 +729,11 @@ export function BrandingSettingsTab() {
                 <div className="relative group">
                   {visualSettings.favicon_url ? (
                     <div className="relative border rounded-lg p-3 bg-white aspect-square w-16">
-                      <img
+                      <Image
                         src={visualSettings.favicon_url}
                         alt="Favicon"
+                        width={64}
+                        height={64}
                         className="w-full h-full object-contain"
                       />
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1 rounded-lg">
@@ -927,9 +934,11 @@ export function BrandingSettingsTab() {
                 <div className="relative group">
                   {reportSettings.logo_url ? (
                     <div className="relative border rounded-lg p-4 bg-white">
-                      <img
+                      <Image
                         src={reportSettings.logo_url}
                         alt="Report logo"
+                        width={200}
+                        height={64}
                         className="h-16 w-auto mx-auto object-contain"
                       />
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-lg">
@@ -970,9 +979,11 @@ export function BrandingSettingsTab() {
                 <div className="relative group">
                   {reportSettings.mark_url ? (
                     <div className="relative border rounded-lg p-4 bg-white">
-                      <img
+                      <Image
                         src={reportSettings.mark_url}
                         alt="Report mark"
+                        width={200}
+                        height={64}
                         className="h-16 w-auto mx-auto object-contain"
                       />
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-lg">

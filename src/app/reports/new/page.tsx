@@ -376,7 +376,7 @@ export default function NewReportPage() {
       }
     }
     return () => debouncedSave.cancel()
-  }, [watchedValues, debouncedSave, isInitialLoadComplete, isDuplicate])
+  }, [watchedValues, debouncedSave, isInitialLoadComplete, isDuplicate, form, toast])
 
   const submitReport = async (values: ReportFormData, isDraft = false) => {
     try {

@@ -122,8 +122,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   )
   
   // Convert array of settings to object for easier access
-  const brandingSettings = systemSettings.reduce((acc: Record<string, unknown>, setting) => {
-    acc[setting.key] = setting.value
+  const brandingSettings = systemSettings.reduce((acc: Record<string, string>, setting) => {
+    acc[setting.key] = String(setting.value || '')
     return acc
   }, {})
 
