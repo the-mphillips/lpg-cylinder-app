@@ -244,7 +244,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
             className="flex items-center gap-3 text-lg font-semibold"
           >
             <DynamicLogo size="xxl" className="mr-1" />
-            {!(brandingSettings?.logo_light_url || brandingSettings?.logo_dark_url) && (
+            {!(brandingSettings?.logo_light_url && String(brandingSettings.logo_light_url).trim() !== '') 
+              && !(brandingSettings?.logo_dark_url && String(brandingSettings.logo_dark_url).trim() !== '') && (
               <span className="hidden sm:inline-block font-bold text-xl">
                 {brandingSettings?.company_name || 'BWA GAS'}
               </span>

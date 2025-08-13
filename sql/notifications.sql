@@ -21,16 +21,16 @@ alter table public.notifications enable row level security;
 -- Allow users to read their own notifications
 drop policy if exists notifications_select_self on public.notifications;
 create policy notifications_select_self on public.notifications
-  for select using (auth.uid() = user_id);
+  for select using ((select auth.uid()) = user_id);
 
 -- Allow users to mark their own notifications as read
 drop policy if exists notifications_update_self on public.notifications;
 create policy notifications_update_self on public.notifications
-  for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for update using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 
 -- Optionally allow users to insert notifications for themselves (not required if only server inserts)
 drop policy if exists notifications_insert_self on public.notifications;
 create policy notifications_insert_self on public.notifications
-  for insert with check (auth.uid() = user_id);
+  for insert with check ((select auth.uid()) = user_id);
 
 

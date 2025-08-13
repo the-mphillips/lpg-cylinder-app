@@ -277,16 +277,15 @@ export default function ViewReportPage() {
     return equipmentItem?.name || equipmentId
   }
 
-  // Helper to normalize Supabase storage URLs and handle already-absolute URLs
+  // Helper to normalize Supabase storage URLs and handle absolute or pre-prefixed paths
   const getImageUrl = (imageName: string) => {
     if (!imageName) return ''
-    const currentProjectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-    // If already an absolute URL
+    const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+    // If already absolute
     try {
       const parsed = new URL(imageName)
-      // Normalize host if it's a Supabase URL from a different project host
-      if (parsed.hostname.endsWith('supabase.co') && currentProjectUrl) {
-        const currentHost = new URL(currentProjectUrl).hostname
+      if (parsed.hostname.endsWith('supabase.co') && projectUrl) {
+        const currentHost = new URL(projectUrl).hostname
         if (parsed.hostname !== currentHost) {
           parsed.hostname = currentHost
           return parsed.toString()
@@ -295,10 +294,15 @@ export default function ViewReportPage() {
       return parsed.toString()
     } catch {}
 
-    // Otherwise treat as filename in our public bucket
-    const bucketName = 'app-data'
-    const safeName = encodeURIComponent(imageName)
-    return `${currentProjectUrl}/storage/v1/object/public/${bucketName}/reports/images/${safeName}`
+    // If imageName already contains a bucket-relative path like 'reports/images/..'
+    if (imageName.startsWith('reports/')) {
+      return `${projectUrl}/storage/v1/object/public/app-data/${imageName}`
+    }
+    if (imageName.startsWith('app-data/')) {
+      return `${projectUrl}/storage/v1/object/public/${imageName}`
+    }
+    // Treat as bare filename inside our standard folder
+    return `${projectUrl}/storage/v1/object/public/app-data/reports/images/${imageName}`
   }
 
   return (
