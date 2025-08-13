@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useMemo, useState } from "react"
+import React, { useMemo, useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -22,6 +22,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Card,
   CardContent,
@@ -139,6 +140,8 @@ export default function Dashboard() {
   const [selectedReport, setSelectedReport] = useState<ReportDetails | null>(null)
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false)
   const [showCharts, setShowCharts] = useState(false)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'submitted' | 'approved' | 'draft' | 'rejected'>('all')
+  const [searchTerm, setSearchTerm] = useState('')
 
   const { 
     data, 
@@ -254,6 +257,12 @@ export default function Dashboard() {
   }
   const totalDelta = calcDeltaPct(lastPoint?.count, prevPoint?.count)
   const approvedDelta = calcDeltaPct(lastPoint?.approved, prevPoint?.approved)
+  const approvalRate = useMemo(() => {
+    const total = data?.reportStatistics?.total || 0
+    const approved = data?.reportStatistics?.approved || 0
+    if (total === 0) return 0
+    return Math.round((approved / total) * 100)
+  }, [data?.reportStatistics])
 
   const MiniSpark = ({ dataKey }: { dataKey: 'count' | 'approved' }) => (
     <div className="h-8 mt-2">
@@ -280,6 +289,37 @@ export default function Dashboard() {
     if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1
     return 0
   }) : []), [data?.recentReports, sortConfig])
+
+  // Restore saved filters
+  useEffect(() => {
+    const saved = typeof window !== 'undefined' ? window.localStorage.getItem('dashboardFilters') : null
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        if (parsed.statusFilter) setStatusFilter(parsed.statusFilter)
+        if (typeof parsed.showCharts === 'boolean') setShowCharts(parsed.showCharts)
+      } catch {}
+    }
+  }, [])
+
+  // Persist filters
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('dashboardFilters', JSON.stringify({ statusFilter, showCharts }))
+    }
+  }, [statusFilter, showCharts])
+
+  const filteredReports = useMemo(() => {
+    let list = sortedReports
+    if (statusFilter !== 'all') {
+      list = list.filter(r => r.status === statusFilter)
+    }
+    if (searchTerm.trim()) {
+      const q = searchTerm.trim().toLowerCase()
+      list = list.filter(r => (r.customer || '').toLowerCase().includes(q) || (r.report_number ? String(r.report_number).includes(q) : false))
+    }
+    return list
+  }, [sortedReports, statusFilter, searchTerm])
 
   // Status badge styling functions to match reports page
   const getStatusColor = (status: string) => {
@@ -351,14 +391,27 @@ export default function Dashboard() {
             </Button>
           </CardHeader>
           <CardContent className="px-6 py-4">
-            <p className="mb-4 text-muted-foreground">Quick actions</p>
-            <div className="flex flex-wrap gap-2">
-              {getQuickActions().map((action, index) => (
-                <Button key={index} onClick={action.action} className="gap-2">
-                  {action.icon}
-                  {action.label}
-                </Button>
-              ))}
+            <div className="flex flex-col gap-4 mb-2">
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-sm text-muted-foreground">Quick actions</span>
+                {getQuickActions().map((action, index) => (
+                  <Button key={index} onClick={action.action} className="gap-2">
+                    {action.icon}
+                    {action.label}
+                  </Button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-sm text-muted-foreground">Filter</span>
+                <Button size="sm" variant={statusFilter==='all'?'default':'outline'} onClick={() => setStatusFilter('all')}>All</Button>
+                <Button size="sm" variant={statusFilter==='submitted'?'default':'outline'} onClick={() => setStatusFilter('submitted')}>Pending</Button>
+                <Button size="sm" variant={statusFilter==='approved'?'default':'outline'} onClick={() => setStatusFilter('approved')}>Approved</Button>
+                <Button size="sm" variant={statusFilter==='draft'?'default':'outline'} onClick={() => setStatusFilter('draft')}>Draft</Button>
+                <Button size="sm" variant={statusFilter==='rejected'?'default':'outline'} onClick={() => setStatusFilter('rejected')}>Rejected</Button>
+                <div className="ml-auto">
+                  <Input placeholder="Search customer or #" value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="h-9 w-[220px]" />
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -532,6 +585,37 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        {/* Extended KPIs */}
+        <div className="grid gap-4 md:grid-cols-3 md:gap-8">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Approval Rate</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{approvalRate}%</div>
+              <p className="text-xs text-muted-foreground">Approved / Total</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">This Month</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{lastPoint?.count ?? 0}</div>
+              <p className="text-xs text-muted-foreground">Reports submitted</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium">Approved This Month</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{lastPoint?.approved ?? 0}</div>
+              <p className="text-xs text-muted-foreground">Approved reports</p>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Analytics Chart */}
         {showCharts && data?.reportTrend && data.reportTrend.length > 0 && (
           <Card>
@@ -543,11 +627,15 @@ export default function Dashboard() {
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={data.reportTrend}>
-                    <defs>
+                     <defs>
                       <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
                         <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
                       </linearGradient>
+                       <linearGradient id="colorApproved" x1="0" y1="0" x2="0" y2="1">
+                         <stop offset="5%" stopColor="#16a34a" stopOpacity={0.7}/>
+                         <stop offset="95%" stopColor="#16a34a" stopOpacity={0}/>
+                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis 
@@ -560,13 +648,20 @@ export default function Dashboard() {
                       fontSize={12}
                     />
                     <RechartsTooltip content={<CustomTooltip />} />
-                    <Area 
+                     <Area 
                       type="monotone" 
                       dataKey="count" 
                       stroke="hsl(var(--primary))" 
                       fillOpacity={1} 
                       fill="url(#colorCount)" 
                     />
+                     <Area 
+                       type="monotone" 
+                       dataKey="approved" 
+                       stroke="#16a34a" 
+                       fillOpacity={1} 
+                       fill="url(#colorApproved)" 
+                     />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -646,7 +741,7 @@ export default function Dashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedReports.slice(0, 10).map((report: ReportData) => (
+                {filteredReports.slice(0, 10).map((report: ReportData) => (
                   <TableRow key={report.id}>
                     <TableCell className="font-medium">
                       <Link 
@@ -752,7 +847,7 @@ export default function Dashboard() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {sortedReports.length === 0 && (
+                {filteredReports.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center py-8">
                       <div className="text-muted-foreground">No reports found</div>
@@ -763,7 +858,7 @@ export default function Dashboard() {
             </Table>
             <div className="p-4 border-t flex justify-between items-center">
               <span className="text-sm text-muted-foreground">
-                Showing {Math.min(sortedReports.length, 10)} of {sortedReports.length} recent reports
+                Showing {Math.min(filteredReports.length, 10)} of {filteredReports.length} recent reports
               </span>
               <Button asChild>
                 <Link href="/reports">View All Reports</Link>
