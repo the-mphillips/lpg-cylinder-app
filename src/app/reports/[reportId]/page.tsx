@@ -310,6 +310,11 @@ export default function ViewReportPage() {
 
   return (
     <div className="container mx-auto p-4 max-w-7xl space-y-6">
+      {/* Sticky action bar (mobile) */}
+      <div className="fixed bottom-4 right-4 z-40 flex gap-2 md:hidden">
+        <Button variant="outline" onClick={() => window.print()} aria-label="Print"><Printer className="h-4 w-4"/></Button>
+        <Button onClick={() => setShowPDFModal(true)} aria-label="Export PDF"><FileText className="h-4 w-4"/></Button>
+      </div>
       {/* Header */}
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3">
@@ -424,7 +429,7 @@ export default function ViewReportPage() {
       </Card>
 
       {/* Test Information and Gas Details - Two Columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Test Information</CardTitle>
@@ -454,6 +459,21 @@ export default function ViewReportPage() {
             <InfoItem label="Cylinder Size" value={report.size} />
             <InfoItem label="Gas Supplier" value={report.gas_supplier || 'N/A'} />
             <InfoItem label="Total Cylinders" value={report.cylinder_data?.length || 0} />
+          </CardContent>
+        </Card>
+
+        {/* Summary Sidebar */}
+        <Card className="lg:row-span-2">
+          <CardHeader>
+            <CardTitle>Summary</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <div><span className="text-muted-foreground">Customer:</span> {report.customer}</div>
+            <div><span className="text-muted-foreground">Vehicle:</span> {report.vehicle_id || 'N/A'}</div>
+            <div><span className="text-muted-foreground">Work Order:</span> {report.work_order || 'N/A'}</div>
+            <div><span className="text-muted-foreground">Test Date:</span> {report.test_date ? new Date(report.test_date).toLocaleDateString() : 'N/A'}</div>
+            <div><span className="text-muted-foreground">Status:</span> {getStatusDisplay(report.status)}</div>
+            <div><span className="text-muted-foreground">Cylinders:</span> {report.cylinder_data?.length || 0}</div>
           </CardContent>
         </Card>
       </div>

@@ -47,6 +47,17 @@ export default function NotificationsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+            {(['info','success','warning','error','system'] as const).map((t) => (
+              <div key={t} className="flex items-center justify-between rounded border px-3 py-2">
+                <span className="text-xs capitalize">{t}</span>
+                <Switch
+                  checked={Boolean(settingsQuery.data?.types?.[t])}
+                  onCheckedChange={(v) => updateSettings.mutate({ types: { ...(settingsQuery.data?.types || {}), [t]: v } })}
+                />
+              </div>
+            ))}
+          </div>
           {items.length === 0 && (
             <div className="text-sm text-muted-foreground">No notifications</div>
           )}
