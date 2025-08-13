@@ -515,11 +515,11 @@ export default function ViewReportPage() {
                 <span className="text-sm text-muted-foreground">
                   {report.equipment_used.length} equipment item(s) used
                 </span>
-                <div className="grid grid-cols-1 gap-1">
+                <div className="flex flex-wrap gap-2">
                   {report.equipment_used.map((equipmentId: string, index: number) => (
-                    <div key={index} className="text-sm bg-muted px-2 py-1 rounded">
+                    <span key={index} className="inline-flex items-center px-2 py-1 rounded-full border text-xs bg-background">
                       {getEquipmentName(equipmentId)}
-                    </div>
+                    </span>
                   ))}
                 </div>
               </div>
@@ -534,25 +534,27 @@ export default function ViewReportPage() {
                 <span className="text-sm text-muted-foreground">
                   {report.images.length} image(s) attached
                 </span>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {report.images.map((imageName: string, index: number) => (
-                    <div key={index} className="relative group">
-                      <Image 
-                        src={getImageUrl(imageName)}
-                        alt={`Report image ${index + 1}`}
-                        width={96}
-                        height={96}
-                        className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => window.open(getImageUrl(imageName), '_blank')}
-                        unoptimized
-                      />
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all rounded flex items-center justify-center">
-                        <span className="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                          Click to view
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {report.images.map((imageName: string, index: number) => {
+                    const url = getImageUrl(imageName)
+                    return (
+                      <a key={index} href={url} target="_blank" rel="noreferrer" className="block">
+                        <div className="relative rounded border overflow-hidden bg-white">
+                          <Image 
+                            src={url}
+                            alt={`Report image ${index + 1}`}
+                            width={320}
+                            height={180}
+                            className="w-full h-32 object-cover transition-transform group-hover:scale-[1.01]"
+                            unoptimized
+                          />
+                          <div className="pointer-events-none absolute inset-0 rounded flex items-center justify-center opacity-0 hover:opacity-100 bg-black/20 transition-opacity">
+                            <span className="text-white text-xs">Click to open</span>
+                          </div>
+                        </div>
+                      </a>
+                    )
+                  })}
                 </div>
               </div>
             ) : (
