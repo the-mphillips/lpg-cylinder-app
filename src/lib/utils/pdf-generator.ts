@@ -70,10 +70,11 @@ export async function generatePDFNative(
   
   // Create print document with base styles and copied head styles
   const baseCss = `
-    @page { size: A4; margin: 5mm; }
+    @page { size: A4; margin: 0; }
     html, body { height: 100%; }
-    body { margin: 0; padding: 0; font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; color-adjust: exact; }
-    .report-container { width: 200mm; min-height: 287mm; max-width: none; margin: 0; padding: 5mm; box-shadow: none; page-break-inside: avoid; }
+    body { margin: 0; padding: 0; font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; color-adjust: exact; background: white; }
+    /* Exact A4 surface with internal padding using border-box */
+    .report-container { width: 210mm; height: 297mm; box-sizing: border-box; padding: 5mm; max-width: none; margin: 0 auto; box-shadow: none; break-inside: avoid; }
     img { max-width: 100%; height: auto; -webkit-print-color-adjust: exact; }
     table, .grid { page-break-inside: avoid; }
     .no-print { display: none !important; }
@@ -145,20 +146,26 @@ export async function generatePDFCanvas(
   const scale = options.scale || 2
 
   try {
+    // Determine pixel dimensions reliably
+    const rect = element.getBoundingClientRect()
+    const targetWidth = Math.ceil(rect.width)
+    const targetHeight = Math.ceil(rect.height)
+
     // Generate canvas from HTML
     const canvas = await html2canvas(element, {
       scale: scale,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
-      width: element.scrollWidth,
-      height: element.scrollHeight,
+      width: targetWidth,
+      height: targetHeight,
       onclone: (clonedDoc) => {
         // Ensure proper styling in cloned document
         const clonedElement = clonedDoc.querySelector('[data-pdf-content]') as HTMLElement
         if (clonedElement) {
           clonedElement.style.transform = 'none'
           clonedElement.style.scale = '1'
+          clonedElement.classList.add('report-container')
         }
       }
     })
@@ -216,11 +223,25 @@ export async function generateImageExport(
   const filename = `${baseFilename}.${format}`
 
   try {
+    const rect = element.getBoundingClientRect()
+    const targetWidth = Math.ceil(rect.width)
+    const targetHeight = Math.ceil(rect.height)
+
     const canvas = await html2canvas(element, {
       scale: scale,
       useCORS: true,
       allowTaint: true,
-      backgroundColor: '#ffffff'
+      backgroundColor: '#ffffff',
+      width: targetWidth,
+      height: targetHeight,
+      onclone: (clonedDoc) => {
+        const clonedElement = clonedDoc.querySelector('[data-pdf-content]') as HTMLElement
+        if (clonedElement) {
+          clonedElement.style.transform = 'none'
+          clonedElement.style.scale = '1'
+          clonedElement.classList.add('report-container')
+        }
+      }
     })
 
     // Convert to blob and download

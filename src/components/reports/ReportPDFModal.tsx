@@ -48,7 +48,7 @@ export function ReportPDFModal({
   showEmailOption = false 
 }: ReportPDFModalProps) {
   const previewRef = useRef<HTMLDivElement>(null)
-  const [exportFormat, setExportFormat] = useState<ExportFormat>('pdf-native')
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('pdf-canvas')
   const [exportQuality, setExportQuality] = useState<ExportQuality>(2)
   const [isGenerating, setIsGenerating] = useState(false)
   const [previewMode, setPreviewMode] = useState(false)
@@ -341,10 +341,10 @@ export function ReportPDFModal({
 
                   <Button 
                     variant="outline"
-                    onClick={() => {
+                    onClick={async () => {
                       if (!previewRef.current || !currentReport) return
                       const pdfData = formatReportData(currentReport)
-                      generatePDFNative(previewRef.current, pdfData, { quality: exportQuality / 3, scale: exportQuality })
+                      await generatePDFCanvas(previewRef.current, pdfData, { quality: exportQuality / 3, scale: exportQuality })
                     }}
                     className="w-full"
                   >
