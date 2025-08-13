@@ -46,44 +46,31 @@ export function DynamicLogo({
   useEffect(() => {
     async function fetchBrandingSettings() {
       try {
-        // Only fetch branding when a session exists to avoid RLS denials pre-auth
-        const { data: sessionData } = await supabase.auth.getSession()
-        if (!sessionData.session) {
-          setIsLoading(false)
+        // Try public endpoint first so login page can render branding
+        const res = await fetch('/api/branding', { cache: 'no-store' })
+        if (res.ok) {
+          const json = await res.json()
+          setBranding(json)
           return
         }
 
-        const { data, error } = await supabase
+        // Fallback to authenticated fetch
+        const { data: sessionData } = await supabase.auth.getSession()
+        if (!sessionData.session) return
+        const { data } = await supabase
           .from('app_settings')
           .select('key, value')
           .eq('category', 'branding')
-
-        if (error) {
-          // Likely RLS not allowing read before auth; fail soft
-          setIsLoading(false)
-          return
-        }
-
         const brandingSettings: BrandingSettings = {}
         data?.forEach((setting: { key: string; value: unknown }) => {
           try {
             let parsedValue = typeof setting.value === 'string' ? JSON.parse(setting.value) : setting.value
-            
-            // Handle nested JSON escaping
             if (typeof parsedValue === 'string' && (parsedValue.startsWith('"') || parsedValue === 'null')) {
-              try {
-                parsedValue = JSON.parse(parsedValue)
-              } catch {
-                // If it fails to parse again, keep the original value
-              }
+              try { parsedValue = JSON.parse(parsedValue) } catch {}
             }
-            
-            // Don't store null strings
             if (parsedValue === 'null' || parsedValue === null || parsedValue === '') {
               parsedValue = undefined
             }
-
-            // Normalize any Supabase storage URLs to current project host
             if (typeof parsedValue === 'string' && parsedValue.includes('supabase.co')) {
               try {
                 const currentHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL as string).hostname
@@ -94,13 +81,11 @@ export function DynamicLogo({
                 }
               } catch {}
             }
-
             brandingSettings[setting.key as keyof BrandingSettings] = parsedValue as string
           } catch {
             brandingSettings[setting.key as keyof BrandingSettings] = setting.value as string
           }
         })
-
         setBranding(brandingSettings)
       } catch (error) {
         console.error('Error fetching branding:', error)
@@ -108,7 +93,6 @@ export function DynamicLogo({
         setIsLoading(false)
       }
     }
-
     fetchBrandingSettings()
   }, [supabase])
 

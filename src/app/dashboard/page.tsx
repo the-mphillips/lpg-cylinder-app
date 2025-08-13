@@ -391,27 +391,14 @@ export default function Dashboard() {
             </Button>
           </CardHeader>
           <CardContent className="px-6 py-4">
-            <div className="flex flex-col gap-4 mb-2">
-              <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-sm text-muted-foreground">Quick actions</span>
-                {getQuickActions().map((action, index) => (
-                  <Button key={index} onClick={action.action} className="gap-2">
-                    {action.icon}
-                    {action.label}
-                  </Button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-2 items-center">
-                <span className="text-sm text-muted-foreground">Filter</span>
-                <Button size="sm" variant={statusFilter==='all'?'default':'outline'} onClick={() => setStatusFilter('all')}>All</Button>
-                <Button size="sm" variant={statusFilter==='submitted'?'default':'outline'} onClick={() => setStatusFilter('submitted')}>Pending</Button>
-                <Button size="sm" variant={statusFilter==='approved'?'default':'outline'} onClick={() => setStatusFilter('approved')}>Approved</Button>
-                <Button size="sm" variant={statusFilter==='draft'?'default':'outline'} onClick={() => setStatusFilter('draft')}>Draft</Button>
-                <Button size="sm" variant={statusFilter==='rejected'?'default':'outline'} onClick={() => setStatusFilter('rejected')}>Rejected</Button>
-                <div className="ml-auto">
-                  <Input placeholder="Search customer or #" value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="h-9 w-[220px]" />
-                </div>
-              </div>
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-sm text-muted-foreground">Quick actions</span>
+              {getQuickActions().map((action, index) => (
+                <Button key={index} onClick={action.action} className="gap-2">
+                  {action.icon}
+                  {action.label}
+                </Button>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -694,6 +681,19 @@ export default function Dashboard() {
               </Button>
             </div>
           </CardHeader>
+          <div className="px-6 pb-2 -mt-2">
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-sm text-muted-foreground">Filter</span>
+              <Button size="sm" variant={statusFilter==='all'?'default':'outline'} onClick={() => setStatusFilter('all')}>All</Button>
+              <Button size="sm" variant={statusFilter==='submitted'?'default':'outline'} onClick={() => setStatusFilter('submitted')}>Pending</Button>
+              <Button size="sm" variant={statusFilter==='approved'?'default':'outline'} onClick={() => setStatusFilter('approved')}>Approved</Button>
+              <Button size="sm" variant={statusFilter==='draft'?'default':'outline'} onClick={() => setStatusFilter('draft')}>Draft</Button>
+              <Button size="sm" variant={statusFilter==='rejected'?'default':'outline'} onClick={() => setStatusFilter('rejected')}>Rejected</Button>
+              <div className="ml-auto">
+                <Input placeholder="Search customer or #" value={searchTerm} onChange={(e)=>setSearchTerm(e.target.value)} className="h-8 w-[220px]" />
+              </div>
+            </div>
+          </div>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
