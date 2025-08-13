@@ -2,12 +2,15 @@
 
 import { useMemo, useState } from 'react'
 import { api } from '@/lib/trpc/client'
+import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
 export default function NotificationsPage() {
   const [showUnread, setShowUnread] = useState(false)
   const { data, refetch, isLoading } = api.notifications.list.useQuery({ limit: 50, unreadOnly: showUnread })
+  const settingsQuery = api.notifications.getSettings.useQuery()
+  const updateSettings = api.notifications.updateSettings.useMutation({ onSuccess: () => settingsQuery.refetch() })
   const markAllRead = api.notifications.markAllRead.useMutation({ onSuccess: () => refetch() })
   const items = useMemo(() => data?.items || [], [data])
 
@@ -29,7 +32,19 @@ export default function NotificationsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>Recent</span>
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <span>Toasts</span>
+                <Switch checked={Boolean(settingsQuery.data?.toast_enabled)} onCheckedChange={(v) => updateSettings.mutate({ toast_enabled: v })} />
+              </div>
+              <div className="flex items-center gap-2">
+                <span>Mute All</span>
+                <Switch checked={Boolean(settingsQuery.data?.mute_all)} onCheckedChange={(v) => updateSettings.mutate({ mute_all: v })} />
+              </div>
+            </div>
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {items.length === 0 && (

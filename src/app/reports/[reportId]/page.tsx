@@ -308,19 +308,26 @@ export default function ViewReportPage() {
   return (
     <div className="container mx-auto p-4 max-w-7xl space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center space-x-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
           <Button variant="outline" onClick={() => router.push('/reports')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Reports
           </Button>
-          <h1 className="text-2xl font-bold">Report #{report.report_number}</h1>
-          <Badge className={getStatusColor(report.status)}>
-            {getStatusDisplay(report.status)}
-          </Badge>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">Report #{report.report_number}</h1>
+              <Badge className={getStatusColor(report.status)}>
+                {getStatusDisplay(report.status)}
+              </Badge>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {report.customer} • {report.formatted_date || (report.test_date ? new Date(report.test_date).toLocaleDateString() : '')}
+            </div>
+          </div>
         </div>
-        
-        <div className="flex space-x-2">
+
+        <div className="flex flex-wrap gap-2">
           {/* PDF Export Button */}
           <Button onClick={() => setShowPDFModal(true)} className="gap-2">
             <FileText className="h-4 w-4" />

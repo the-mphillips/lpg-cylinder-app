@@ -74,6 +74,40 @@ export const notificationsRouter = createTRPCRouter({
       if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to create notification' })
       return { id: data?.id }
     }),
+
+  getSettings: authedProcedure.query(async ({ ctx }) => {
+    // Prefer users.notification_settings JSONB
+    const { data: userRow } = await ctx.supabaseService
+      .from('users')
+      .select('notification_settings')
+      .eq('id', ctx.user.id)
+      .maybeSingle()
+    const defaults = { mute_all: false, toast_enabled: true, email_enabled: false, types: { info: true, success: true, warning: true, error: true, system: true } }
+    return (userRow?.notification_settings as any) || defaults
+  }),
+
+  updateSettings: authedProcedure
+    .input(z.object({
+      mute_all: z.boolean().optional(),
+      toast_enabled: z.boolean().optional(),
+      email_enabled: z.boolean().optional(),
+      types: z.record(z.boolean()).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      // Merge into users.notification_settings
+      const { data: current } = await ctx.supabaseService
+        .from('users')
+        .select('notification_settings')
+        .eq('id', ctx.user.id)
+        .maybeSingle()
+      const merged = { ...(current?.notification_settings || {}), ...input }
+      const { error } = await ctx.supabaseService
+        .from('users')
+        .update({ notification_settings: merged, updated_at: new Date().toISOString() })
+        .eq('id', ctx.user.id)
+      if (error) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to save notification settings' })
+      return { success: true }
+    }),
 })
 
 

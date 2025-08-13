@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { api } from '@/lib/trpc/client'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
 
 interface NotificationItem {
   id: string
@@ -32,18 +33,48 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false)
   const supabase = createClient()
   const { data: currentUser } = api.auth.getCurrentUser.useQuery()
-  const listQuery = api.notifications.list.useQuery({ limit: 8 }, { refetchInterval: 60_000 })
+  const listQuery = api.notifications.list.useQuery({ limit: 8 }, { refetchInterval: false })
   const markRead = api.notifications.markRead.useMutation({ onSuccess: () => listQuery.refetch() })
   const markAllRead = api.notifications.markAllRead.useMutation({ onSuccess: () => listQuery.refetch() })
+  const settingsQuery = api.notifications.getSettings.useQuery(undefined, { refetchOnWindowFocus: false })
 
   // Realtime updates
   useEffect(() => {
     if (!currentUser?.id) return
+    const allowRealtime = (settingsQuery.data?.toast_enabled || true) && !settingsQuery.data?.mute_all
+    if (!allowRealtime) return
+    let refetchTimeout: ReturnType<typeof setTimeout> | null = null
+    const debouncedRefetch = () => {
+      if (refetchTimeout) clearTimeout(refetchTimeout)
+      refetchTimeout = setTimeout(() => listQuery.refetch(), 150)
+    }
     const channel = supabase.channel('realtime:notifications')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser.id}` }, () => listQuery.refetch())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser.id}` }, () => {
+        debouncedRefetch()
+      })
+      .subscribe()
+    return () => {
+      if (refetchTimeout) clearTimeout(refetchTimeout)
+      supabase.removeChannel(channel)
+    }
+  }, [supabase, currentUser?.id, listQuery, settingsQuery.data?.toast_enabled, settingsQuery.data?.mute_all])
+
+  // In-app toasts when enabled
+  useEffect(() => {
+    if (!currentUser?.id) return
+    const allowToast = settingsQuery.data?.toast_enabled && !settingsQuery.data?.mute_all
+    if (!allowToast) return
+    const channel = supabase.channel('realtime:notifications')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
+        const n = (payload.new ?? {}) as { title?: string; message?: string; link?: string | null }
+        const title = n.title || 'Notification'
+        const description = n.message
+        const link = n.link
+        toast(title, { description, action: link ? { label: 'Open', onClick: () => window.location.assign(link) } : undefined })
+      })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [supabase, currentUser?.id, listQuery])
+  }, [supabase, currentUser?.id, settingsQuery.data?.toast_enabled, settingsQuery.data?.mute_all])
 
   const unreadCount = listQuery.data?.unreadCount || 0
   const items: NotificationItem[] = useMemo(() => (listQuery.data?.items as NotificationItem[]) || [], [listQuery.data])
@@ -65,7 +96,12 @@ export function NotificationBell() {
       <DropdownMenuContent className="w-96" align="end">
         <DropdownMenuLabel className="flex items-center justify-between">
           <span>Notifications</span>
-          <Button variant="ghost" size="sm" onClick={() => markAllRead.mutate()}>Mark all read</Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => markAllRead.mutate()}>Mark all read</Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/notifications">Preferences</Link>
+            </Button>
+          </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {items.length === 0 && (
