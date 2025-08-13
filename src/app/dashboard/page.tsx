@@ -244,6 +244,33 @@ export default function Dashboard() {
     return actions
   }
 
+  // Trend helpers (month-over-month deltas)
+  const trend = data?.reportTrend || []
+  const lastPoint = trend.at(-1)
+  const prevPoint = trend.at(-2)
+  const calcDeltaPct = (curr?: number, prev?: number) => {
+    if (curr === undefined || prev === undefined || prev === 0) return null
+    return Math.round(((curr - prev) / prev) * 100)
+  }
+  const totalDelta = calcDeltaPct(lastPoint?.count, prevPoint?.count)
+  const approvedDelta = calcDeltaPct(lastPoint?.approved, prevPoint?.approved)
+
+  const MiniSpark = ({ dataKey }: { dataKey: 'count' | 'approved' }) => (
+    <div className="h-8 mt-2">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={trend.slice(-8)}>
+          <defs>
+            <linearGradient id={`mini-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.7} />
+              <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area type="monotone" dataKey={dataKey} stroke="hsl(var(--primary))" fill={`url(#mini-${dataKey})`} strokeWidth={1.5} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+
   // Memoize sort to avoid re-sorts
   const sortedReports = useMemo(() => (data?.recentReports ? [...data.recentReports].sort((a, b) => {
     const aValue = a[sortConfig.key as keyof typeof a]
@@ -347,7 +374,15 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-blue-700">{reportStatistics?.total || 0}</div>
-              <p className="text-xs text-muted-foreground">All reports in the system</p>
+              <div className="flex items-center justify-between text-xs">
+                <p className="text-muted-foreground">All reports</p>
+                {totalDelta !== null && (
+                  <span className={totalDelta >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                    {totalDelta >= 0 ? '▲' : '▼'} {Math.abs(totalDelta)}%
+                  </span>
+                )}
+              </div>
+              <MiniSpark dataKey="count" />
             </CardContent>
           </Card>
 
@@ -373,7 +408,15 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-green-700">{reportStatistics?.approved || 0}</div>
-              <p className="text-xs text-muted-foreground">Reports that are fully approved</p>
+              <div className="flex items-center justify-between text-xs">
+                <p className="text-muted-foreground">Fully approved</p>
+                {approvedDelta !== null && (
+                  <span className={approvedDelta >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                    {approvedDelta >= 0 ? '▲' : '▼'} {Math.abs(approvedDelta)}%
+                  </span>
+                )}
+              </div>
+              <MiniSpark dataKey="approved" />
             </CardContent>
           </Card>
 
