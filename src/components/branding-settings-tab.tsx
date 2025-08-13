@@ -55,7 +55,7 @@ export function BrandingSettingsTab() {
   const { mutateAsync: updateSystemSetting } = api.admin.updateSystemSetting.useMutation()
 
   // Queries
-  const { data: systemSettings, isLoading, refetch } = api.admin.getSystemSettings.useQuery()
+  const { data: systemSettings, isLoading, refetch } = api.admin.getAllAppSettings.useQuery()
 
   const normalizeAssetUrl = (url: string): string => {
     if (!url) return ''
@@ -133,9 +133,9 @@ export function BrandingSettingsTab() {
         favicon_url: normalizeAssetUrl(safeStringValue(settingsObj.favicon_url))
       }
       
-      setCompanyInfo(newCompanyInfo)
-      setOriginalCompanyInfo(newCompanyInfo)
-      setVisualSettings(newVisualSettings)
+       setCompanyInfo(newCompanyInfo)
+       setOriginalCompanyInfo(newCompanyInfo)
+       setVisualSettings(newVisualSettings)
       
       // Load report settings
       const newReportSettings = {
