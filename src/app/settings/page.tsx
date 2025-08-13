@@ -1130,8 +1130,7 @@ function MajorCustomersTab() {
           contact_phone: form.contact_phone || undefined,
           address: form.address || undefined,
           billing_address: form.billing_address || undefined,
-          website: form.website || undefined,
-          is_active: form.is_active,
+          website: form.website || undefined
         })
         toast.success('Customer updated')
       } else {

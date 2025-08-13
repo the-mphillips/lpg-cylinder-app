@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -244,14 +244,15 @@ export default function Dashboard() {
     return actions
   }
 
-  const sortedReports = data?.recentReports ? [...data.recentReports].sort((a, b) => {
+  // Memoize sort to avoid re-sorts
+  const sortedReports = useMemo(() => (data?.recentReports ? [...data.recentReports].sort((a, b) => {
     const aValue = a[sortConfig.key as keyof typeof a]
     const bValue = b[sortConfig.key as keyof typeof b]
     
     if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1
     if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1
     return 0
-  }) : []
+  }) : []), [data?.recentReports, sortConfig])
 
   // Status badge styling functions to match reports page
   const getStatusColor = (status: string) => {
@@ -285,8 +286,17 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="p-6 space-y-4">
+        <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-28 rounded-xl border bg-muted/20 animate-pulse" />
+          ))}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 md:gap-8">
+          <div className="h-72 rounded-xl border bg-muted/20 animate-pulse" />
+          <div className="h-72 rounded-xl border bg-muted/20 animate-pulse" />
+        </div>
+        <div className="h-96 rounded-xl border bg-muted/20 animate-pulse" />
       </div>
     )
   }
@@ -297,7 +307,7 @@ export default function Dashboard() {
     <div className="flex min-h-screen w-full flex-col">
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
         {/* Welcome and Quick Actions */}
-        <Card>
+        <Card className="bg-gradient-to-br from-background to-muted/30">
           <CardHeader className="pb-0 pt-6 relative">
             <CardTitle className="text-xl">Welcome, {user?.full_name}!</CardTitle>
             <Button 
@@ -314,7 +324,7 @@ export default function Dashboard() {
             </Button>
           </CardHeader>
           <CardContent className="px-6 py-4">
-            <p className="mb-4 text-muted-foreground">This is your dashboard. Quick actions:</p>
+            <p className="mb-4 text-muted-foreground">Quick actions</p>
             <div className="flex flex-wrap gap-2">
               {getQuickActions().map((action, index) => (
                 <Button key={index} onClick={action.action} className="gap-2">

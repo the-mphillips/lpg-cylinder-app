@@ -119,7 +119,7 @@ export function DynamicLogo({
     )
   }
 
-  // Show image logo if available and no error
+  // Show image logo if available and no error. Only show company name alongside if explicitly requested.
   if (logoUrl && logoUrl !== 'null' && logoUrl !== 'undefined' && typeof logoUrl === 'string' && logoUrl.trim() !== '' && !imageError) {
     return (
       <div className={`flex items-center gap-3 ${className}`}>
@@ -133,12 +133,7 @@ export function DynamicLogo({
             priority
           />
         </div>
-        {showCompanyName && (
-          <div className="flex flex-col">
-            <span className="font-bold text-lg leading-tight">{companyName}</span>
-            <span className="text-sm text-muted-foreground">Test Report System</span>
-          </div>
-        )}
+        {/* When a logo is shown, suppress company name text in navbar per requirement */}
       </div>
     )
   }

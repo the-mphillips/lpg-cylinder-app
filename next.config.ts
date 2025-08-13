@@ -10,13 +10,7 @@ const nextConfig: NextConfig = {
   // Configure image domains for Supabase storage
   images: {
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'zeutqasvnvbigebcwjfo.supabase.co',
-        port: '',
-        pathname: '/storage/v1/object/**',
-      },
-      // Add pattern for any Supabase project URL from environment
+      // Add pattern for Supabase project URL from environment
       ...(process.env.NEXT_PUBLIC_SUPABASE_URL 
         ? [{
             protocol: 'https' as const,
