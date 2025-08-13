@@ -358,7 +358,7 @@ export default function NewReportPage() {
     if (!isDuplicate || (isDuplicate && duplicateData && majorCustomers.length > 0)) {
       loadInitialData()
     }
-  }, [isDuplicate, duplicateData, majorCustomers.length, isInitialLoadComplete]) // Simplified dependencies
+  }, [isDuplicate, duplicateData, majorCustomers.length, isInitialLoadComplete, form, toast]) // include form and toast to satisfy exhaustive-deps
 
   // Watch form values for auto-save (only after initial load is complete)
   const watchedValues = form.watch()

@@ -19,6 +19,7 @@ import { toast } from "sonner"
 import { ReportPDFModal } from '@/components/reports/ReportPDFModal'
 import { ReportData } from '@/components/reports/ReportPreview'
 import Image from 'next/image'
+import { ImageLightbox } from '@/components/ui/image-lightbox'
 
 interface CylinderData {
   cylinderNo: string
@@ -47,6 +48,8 @@ export default function ViewReportPage() {
   const [selectedSignatory, setSelectedSignatory] = useState('')
   const [adminPassword, setAdminPassword] = useState('')
   const [archiveReason, setArchiveReason] = useState('')
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [lightboxIndex, setLightboxIndex] = useState(0)
 
   // API queries
   const { data: report, isLoading, error } = api.reports.getById.useQuery({ id: reportId })
@@ -545,7 +548,7 @@ export default function ViewReportPage() {
                   {report.images.map((imageName: string, index: number) => {
                     const url = getImageUrl(imageName)
                     return (
-                      <a key={index} href={url} target="_blank" rel="noreferrer" className="block">
+                      <button key={index} type="button" onClick={() => { setLightboxIndex(index); setLightboxOpen(true) }} className="block">
                         <div className="relative rounded border overflow-hidden bg-white">
                           <Image 
                             src={url}
@@ -556,10 +559,10 @@ export default function ViewReportPage() {
                             unoptimized
                           />
                           <div className="pointer-events-none absolute inset-0 rounded flex items-center justify-center opacity-0 hover:opacity-100 bg-black/20 transition-opacity">
-                            <span className="text-white text-xs">Click to open</span>
+                            <span className="text-white text-xs">View</span>
                           </div>
                         </div>
-                      </a>
+                      </button>
                     )
                   })}
                 </div>
@@ -568,6 +571,14 @@ export default function ViewReportPage() {
               <span className="text-gray-500 italic">No images</span>
             )} 
           />
+          {Array.isArray(report.images) && report.images.length > 0 && (
+            <ImageLightbox 
+              open={lightboxOpen}
+              onOpenChange={setLightboxOpen}
+              images={report.images.map((name: string) => getImageUrl(name))}
+              startIndex={lightboxIndex}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -605,41 +616,37 @@ export default function ViewReportPage() {
         {/* Audit Trail */}
         <Card>
           <CardHeader>
-            <CardTitle>Audit Trail</CardTitle>
+            <CardTitle>Activity Timeline</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <InfoItem 
-              label="Created By" 
-              value={report.created_by_name || 'Unknown'} 
-            />
-            <InfoItem 
-              label="Created At" 
-              value={report.created_at ? new Date(report.created_at).toLocaleString() : 'Unknown'} 
-            />
-            {report.updated_by_name && report.updated_at !== report.created_at && (
-              <>
-                <InfoItem 
-                  label="Last Updated By" 
-                  value={report.updated_by_name} 
-                />
-                <InfoItem 
-                  label="Last Updated At" 
-                  value={new Date(report.updated_at).toLocaleString()} 
-                />
-              </>
-            )}
-            {report.approved_by_name && (
-              <InfoItem 
-                label="Approved By User" 
-                value={report.approved_by_name} 
-              />
-            )}
-            {report.submitted_by_name && (
-              <InfoItem 
-                label="Submitted By" 
-                value={report.submitted_by_name} 
-              />
-            )}
+          <CardContent>
+            <ol className="relative border-l ml-2 pl-4">
+              <li className="mb-4">
+                <div className="absolute -left-1.5 h-3 w-3 rounded-full bg-blue-500" />
+                <div className="text-sm">Created</div>
+                <div className="text-xs text-muted-foreground">{report.created_at ? new Date(report.created_at).toLocaleString() : 'Unknown'}{report.created_by_name ? ` • ${report.created_by_name}` : ''}</div>
+              </li>
+              {report.updated_by_name && report.updated_at !== report.created_at && (
+                <li className="mb-4">
+                  <div className="absolute -left-1.5 h-3 w-3 rounded-full bg-amber-500" />
+                  <div className="text-sm">Updated</div>
+                  <div className="text-xs text-muted-foreground">{new Date(report.updated_at).toLocaleString()} • {report.updated_by_name}</div>
+                </li>
+              )}
+              {report.approved_by_name && (
+                <li className="mb-2">
+                  <div className="absolute -left-1.5 h-3 w-3 rounded-full bg-green-600" />
+                  <div className="text-sm">Approved</div>
+                  <div className="text-xs text-muted-foreground">{new Date(report.updated_at).toLocaleString()} • {report.approved_by_name}</div>
+                </li>
+              )}
+              {report.submitted_by_name && (
+                <li className="mb-2">
+                  <div className="absolute -left-1.5 h-3 w-3 rounded-full bg-purple-600" />
+                  <div className="text-sm">Submitted</div>
+                  <div className="text-xs text-muted-foreground">{report.formatted_date || ''} • {report.submitted_by_name}</div>
+                </li>
+              )}
+            </ol>
           </CardContent>
         </Card>
       </div>

@@ -83,7 +83,8 @@ export const notificationsRouter = createTRPCRouter({
       .eq('id', ctx.user.id)
       .maybeSingle()
     const defaults = { mute_all: false, toast_enabled: true, email_enabled: false, types: { info: true, success: true, warning: true, error: true, system: true } }
-    return (userRow?.notification_settings as any) || defaults
+    const settings = userRow?.notification_settings as { mute_all?: boolean; toast_enabled?: boolean; email_enabled?: boolean; types?: Record<string, boolean> } | null
+    return settings || defaults
   }),
 
   updateSettings: authedProcedure
