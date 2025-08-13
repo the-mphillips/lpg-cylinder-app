@@ -74,7 +74,7 @@ export function ReportPreview({ data, className, printMode = false }: ReportPrev
           "max-w-[210mm]"
         ],
         // Typography
-        "text-[10pt] leading-tight",
+        "text-[10pt] leading-[1.2]",
         // Flex layout for proper spacing
         "flex flex-col",
         "gap-1",

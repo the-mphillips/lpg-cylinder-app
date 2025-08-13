@@ -243,6 +243,11 @@ export function ReportPDFModal({
               <p className="text-xs text-muted-foreground">
                 {formatInfo.description}
               </p>
+              {exportFormat === 'pdf-canvas' && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                  Tip: If you see a color parsing error (oklch), it means a CSS color unsupported by the canvas engine is present. The modal preview will still be correct; use Native PDF if this appears.
+                </p>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -344,7 +349,12 @@ export function ReportPDFModal({
                     onClick={async () => {
                       if (!previewRef.current || !currentReport) return
                       const pdfData = formatReportData(currentReport)
-                      await generatePDFCanvas(previewRef.current, pdfData, { quality: exportQuality / 3, scale: exportQuality })
+                      try {
+                        await generatePDFCanvas(previewRef.current, pdfData, { quality: exportQuality / 3, scale: exportQuality })
+                      } catch {
+                        // Fallback to native if canvas fails (e.g., oklch colors)
+                        await generatePDFNative(previewRef.current, pdfData, { quality: exportQuality / 3, scale: exportQuality })
+                      }
                     }}
                     className="w-full"
                   >

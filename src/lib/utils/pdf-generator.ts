@@ -159,6 +159,7 @@ export async function generatePDFCanvas(
       backgroundColor: '#ffffff',
       width: targetWidth,
       height: targetHeight,
+      foreignObjectRendering: true,
       onclone: (clonedDoc) => {
         // Ensure proper styling in cloned document
         const clonedElement = clonedDoc.querySelector('[data-pdf-content]') as HTMLElement
@@ -234,6 +235,7 @@ export async function generateImageExport(
       backgroundColor: '#ffffff',
       width: targetWidth,
       height: targetHeight,
+      foreignObjectRendering: true,
       onclone: (clonedDoc) => {
         const clonedElement = clonedDoc.querySelector('[data-pdf-content]') as HTMLElement
         if (clonedElement) {
