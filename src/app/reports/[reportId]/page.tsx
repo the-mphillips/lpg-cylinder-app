@@ -277,13 +277,28 @@ export default function ViewReportPage() {
     return equipmentItem?.name || equipmentId
   }
 
-  // Helper function to create image URL
+  // Helper to normalize Supabase storage URLs and handle already-absolute URLs
   const getImageUrl = (imageName: string) => {
-    // Images are stored in the app-data bucket under reports/images/
-    // Construct the public URL for Supabase storage
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    if (!imageName) return ''
+    const currentProjectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+    // If already an absolute URL
+    try {
+      const parsed = new URL(imageName)
+      // Normalize host if it's a Supabase URL from a different project host
+      if (parsed.hostname.endsWith('supabase.co') && currentProjectUrl) {
+        const currentHost = new URL(currentProjectUrl).hostname
+        if (parsed.hostname !== currentHost) {
+          parsed.hostname = currentHost
+          return parsed.toString()
+        }
+      }
+      return parsed.toString()
+    } catch {}
+
+    // Otherwise treat as filename in our public bucket
     const bucketName = 'app-data'
-    return `${supabaseUrl}/storage/v1/object/public/${bucketName}/reports/images/${imageName}`
+    const safeName = encodeURIComponent(imageName)
+    return `${currentProjectUrl}/storage/v1/object/public/${bucketName}/reports/images/${safeName}`
   }
 
   return (
@@ -525,6 +540,7 @@ export default function ViewReportPage() {
                         height={96}
                         className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => window.open(getImageUrl(imageName), '_blank')}
+                        unoptimized
                       />
                       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all rounded flex items-center justify-center">
                         <span className="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity">
