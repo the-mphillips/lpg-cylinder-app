@@ -16,7 +16,12 @@ export function DynamicFavicon() {
           .eq('key', 'favicon_url')
           .single()
 
-        if (error || !data?.value) {
+        if (error) {
+          console.warn('Favicon fetch skipped (RLS or not available).')
+          return
+        }
+
+        if (!data?.value) {
           console.log('No custom favicon found, using default')
           return
         }

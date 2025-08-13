@@ -52,7 +52,7 @@ export function DynamicLogo({
           .eq('category', 'branding')
 
         if (error) {
-          console.error('Error fetching branding settings:', error)
+          // Likely RLS not allowing read before auth; fail soft
           setIsLoading(false)
           return
         }
