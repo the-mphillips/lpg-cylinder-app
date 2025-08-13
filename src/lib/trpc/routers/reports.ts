@@ -986,6 +986,24 @@ export const reportsRouter = createTRPCRouter({
       }
     }),
 
+  // Report activity timeline from audit_logs
+  getTimeline: authedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const { data, error } = await ctx.supabaseService
+        .from('audit_logs')
+        .select('id, created_at, action, message, user_name, log_type, level, details')
+        .eq('resource_type', 'report')
+        .eq('resource_id', input.id)
+        .order('created_at', { ascending: true })
+
+      if (error) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch timeline' })
+      }
+
+      return data || []
+    }),
+
   permanentlyDeleteReport: adminProcedure
     .input(z.object({ 
       id: z.string(),

@@ -53,6 +53,7 @@ export default function ViewReportPage() {
 
   // API queries
   const { data: report, isLoading, error } = api.reports.getById.useQuery({ id: reportId })
+  const { data: timeline = [] } = api.reports.getTimeline.useQuery({ id: reportId })
   const { data: currentUser } = api.auth.getCurrentUser.useQuery()
   const { data: signatories = [] } = api.admin.getSignatories.useQuery()
   const { data: equipment = [] } = api.equipment.list.useQuery()
@@ -316,7 +317,7 @@ export default function ViewReportPage() {
         <Button onClick={() => setShowPDFModal(true)} aria-label="Export PDF"><FileText className="h-4 w-4"/></Button>
       </div>
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="sticky top-20 z-30 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex flex-col gap-3 md:flex-row md:items-center md:justify-between p-2 rounded">
         <div className="flex items-center gap-3">
           <Button variant="outline" onClick={() => router.push('/reports')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -639,34 +640,20 @@ export default function ViewReportPage() {
             <CardTitle>Activity Timeline</CardTitle>
           </CardHeader>
           <CardContent>
-            <ol className="relative border-l ml-2 pl-4">
-              <li className="mb-4">
-                <div className="absolute -left-1.5 h-3 w-3 rounded-full bg-blue-500" />
-                <div className="text-sm">Created</div>
-                <div className="text-xs text-muted-foreground">{report.created_at ? new Date(report.created_at).toLocaleString() : 'Unknown'}{report.created_by_name ? ` • ${report.created_by_name}` : ''}</div>
-              </li>
-              {report.updated_by_name && report.updated_at !== report.created_at && (
-                <li className="mb-4">
-                  <div className="absolute -left-1.5 h-3 w-3 rounded-full bg-amber-500" />
-                  <div className="text-sm">Updated</div>
-                  <div className="text-xs text-muted-foreground">{new Date(report.updated_at).toLocaleString()} • {report.updated_by_name}</div>
-                </li>
-              )}
-              {report.approved_by_name && (
-                <li className="mb-2">
-                  <div className="absolute -left-1.5 h-3 w-3 rounded-full bg-green-600" />
-                  <div className="text-sm">Approved</div>
-                  <div className="text-xs text-muted-foreground">{new Date(report.updated_at).toLocaleString()} • {report.approved_by_name}</div>
-                </li>
-              )}
-              {report.submitted_by_name && (
-                <li className="mb-2">
-                  <div className="absolute -left-1.5 h-3 w-3 rounded-full bg-purple-600" />
-                  <div className="text-sm">Submitted</div>
-                  <div className="text-xs text-muted-foreground">{report.formatted_date || ''} • {report.submitted_by_name}</div>
-                </li>
-              )}
-            </ol>
+            {timeline.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No activity yet</div>
+            ) : (
+              <ol className="relative border-l ml-2 pl-4">
+                {timeline.map((e: { id: string; created_at: string; action?: string; message?: string; user_name?: string; log_type?: string; level?: 'DEBUG'|'INFO'|'WARNING'|'ERROR'|'CRITICAL' }) => (
+                  <li key={e.id} className="mb-4">
+                    <div className={`absolute -left-1.5 h-3 w-3 rounded-full ${e.action?.toLowerCase().includes('approve') ? 'bg-green-600' : e.level === 'WARNING' ? 'bg-amber-500' : e.level === 'ERROR' ? 'bg-red-600' : 'bg-blue-500'}`} />
+                    <div className="text-sm">{e.action || e.log_type}</div>
+                    <div className="text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString()} {e.user_name ? `• ${e.user_name}` : ''}</div>
+                    {e.message && <div className="text-xs">{e.message}</div>}
+                  </li>
+                ))}
+              </ol>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -27,8 +27,8 @@ export function ImageLightbox({ open, onOpenChange, images, startIndex = 0 }: Im
     return i
   }, [images.length])
 
-  const handleNext = () => setIndex((i) => clampIndex(i + 1))
-  const handlePrev = () => setIndex((i) => clampIndex(i - 1))
+  const handleNext = useCallback(() => setIndex((i) => clampIndex(i + 1)), [clampIndex])
+  const handlePrev = useCallback(() => setIndex((i) => clampIndex(i - 1)), [clampIndex])
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
