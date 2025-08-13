@@ -68,57 +68,29 @@ export async function generatePDFNative(
   // Clone the element content
   const clonedElement = element.cloneNode(true) as HTMLElement
   
-  // Create print document
+  // Create print document with base styles and copied head styles
+  const baseCss = `
+    @page { size: A4; margin: 5mm; }
+    html, body { height: 100%; }
+    body { margin: 0; padding: 0; font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; color-adjust: exact; }
+    .report-container { width: 200mm; min-height: 287mm; max-width: none; margin: 0; padding: 5mm; box-shadow: none; page-break-inside: avoid; }
+    img { max-width: 100%; height: auto; -webkit-print-color-adjust: exact; }
+    table, .grid { page-break-inside: avoid; }
+    .no-print { display: none !important; }
+  `
+
+  const head = document.head.cloneNode(true) as HTMLHeadElement
+  // Remove script tags from cloned head
+  Array.from(head.querySelectorAll('script')).forEach(s => s.remove())
+
+  // Write initial HTML
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
       <head>
         <title>${filename}</title>
-        <style>
-          @page {
-            size: A4;
-            margin: 5mm;
-          }
-          
-          @media print {
-            body {
-              margin: 0;
-              padding: 0;
-              font-family: Arial, sans-serif;
-              -webkit-print-color-adjust: exact;
-              color-adjust: exact;
-            }
-            
-            .report-container {
-              width: 200mm;
-              min-height: 287mm;
-              max-width: none;
-              margin: 0;
-              padding: 5mm;
-              box-shadow: none;
-              page-break-inside: avoid;
-            }
-            
-            /* Ensure images print */
-            img {
-              max-width: 100%;
-              height: auto;
-              -webkit-print-color-adjust: exact;
-            }
-            
-            /* Table print optimizations */
-            table, .grid {
-              page-break-inside: avoid;
-            }
-            
-            /* Hide non-essential elements */
-            .no-print {
-              display: none !important;
-            }
-          }
-          
-          ${getComputedStylesAsCSS(element)}
-        </style>
+        ${head.innerHTML}
+        <style>${baseCss}</style>
       </head>
       <body>
         ${clonedElement.outerHTML}
@@ -151,11 +123,13 @@ export async function generatePDFNative(
     })
   })
   
-  // Small delay to ensure rendering
+  // Wait next tick for CSS to apply, then print
   setTimeout(() => {
+    printWindow.focus()
     printWindow.print()
-    printWindow.close()
-  }, 500)
+    // Close only after print dialog opens on most browsers
+    setTimeout(() => printWindow.close(), 300)
+  }, 300)
 }
 
 /**
@@ -268,29 +242,7 @@ export async function generateImageExport(
   }
 }
 
-/**
- * Utility to extract computed styles as CSS string
- */
-function getComputedStylesAsCSS(element: HTMLElement): string {
-  const styles = window.getComputedStyle(element)
-  let cssString = ''
-  
-  // Extract the most important styles for printing
-  const importantProps = [
-    'font-family', 'font-size', 'font-weight', 'line-height',
-    'color', 'background-color', 'border', 'margin', 'padding',
-    'width', 'height', 'display', 'position'
-  ]
-  
-  importantProps.forEach(prop => {
-    const value = styles.getPropertyValue(prop)
-    if (value) {
-      cssString += `${prop}: ${value}; `
-    }
-  })
-  
-  return cssString
-}
+// Removed unused getComputedStylesAsCSS helper to satisfy linter
 
 /**
  * Batch PDF generation for multiple reports

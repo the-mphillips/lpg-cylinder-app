@@ -313,7 +313,7 @@ export default function ViewReportPage() {
     <div className="container mx-auto p-4 max-w-7xl space-y-6">
       {/* Sticky action bar (mobile) */}
       <div className="fixed bottom-4 right-4 z-40 flex gap-2 md:hidden">
-        <Button variant="outline" onClick={() => window.print()} aria-label="Print"><Printer className="h-4 w-4"/></Button>
+        <Button variant="outline" onClick={() => setShowPDFModal(true)} aria-label="Print"><Printer className="h-4 w-4"/></Button>
         <Button onClick={() => setShowPDFModal(true)} aria-label="Export PDF"><FileText className="h-4 w-4"/></Button>
       </div>
       {/* Sticky action bar (desktop) */}
@@ -323,7 +323,7 @@ export default function ViewReportPage() {
             Report #{report.report_number} • {report.customer} • {report.formatted_date || (report.test_date ? new Date(report.test_date).toLocaleDateString() : '')}
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => window.print()} className="gap-2"><Printer className="h-4 w-4"/>Print</Button>
+            <Button variant="outline" onClick={() => setShowPDFModal(true)} className="gap-2"><Printer className="h-4 w-4"/>Print</Button>
             <Button variant="outline" onClick={() => setShowPDFModal(true)} className="gap-2"><FileText className="h-4 w-4"/>PDF</Button>
             <Button variant="outline" onClick={handleDuplicate} className="gap-2"><Download className="h-4 w-4"/>Duplicate</Button>
             {canApprove && report.status !== 'approved' && (
@@ -363,7 +363,7 @@ export default function ViewReportPage() {
           </Button>
 
           {/* Quick Print Button */}
-          <Button variant="outline" onClick={() => window.print()} className="gap-2">
+          <Button variant="outline" onClick={() => setShowPDFModal(true)} className="gap-2">
             <Printer className="h-4 w-4" />
             Print
           </Button>

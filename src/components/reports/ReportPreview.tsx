@@ -57,7 +57,7 @@ export function ReportPreview({ data, className, printMode = false }: ReportPrev
     <div 
       className={cn(
         // Base container styles
-        "bg-white font-sans text-black",
+        "bg-white font-sans text-black report-container",
         // A4 dimensions and layout
         "w-[210mm] min-h-[297mm]",
         "p-[5mm]",

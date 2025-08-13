@@ -341,7 +341,11 @@ export function ReportPDFModal({
 
                   <Button 
                     variant="outline"
-                    onClick={() => window.print()}
+                    onClick={() => {
+                      if (!previewRef.current || !currentReport) return
+                      const pdfData = formatReportData(currentReport)
+                      generatePDFNative(previewRef.current, pdfData, { quality: exportQuality / 3, scale: exportQuality })
+                    }}
                     className="w-full"
                   >
                     <Printer className="h-4 w-4 mr-2" />
