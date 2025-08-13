@@ -316,6 +316,25 @@ export default function ViewReportPage() {
         <Button variant="outline" onClick={() => window.print()} aria-label="Print"><Printer className="h-4 w-4"/></Button>
         <Button onClick={() => setShowPDFModal(true)} aria-label="Export PDF"><FileText className="h-4 w-4"/></Button>
       </div>
+      {/* Sticky action bar (desktop) */}
+      <div className="hidden md:flex fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+        <div className="mx-auto max-w-7xl w-full p-3 flex items-center justify-between gap-3">
+          <div className="text-sm text-muted-foreground truncate">
+            Report #{report.report_number} • {report.customer} • {report.formatted_date || (report.test_date ? new Date(report.test_date).toLocaleDateString() : '')}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => window.print()} className="gap-2"><Printer className="h-4 w-4"/>Print</Button>
+            <Button variant="outline" onClick={() => setShowPDFModal(true)} className="gap-2"><FileText className="h-4 w-4"/>PDF</Button>
+            <Button variant="outline" onClick={handleDuplicate} className="gap-2"><Download className="h-4 w-4"/>Duplicate</Button>
+            {canApprove && report.status !== 'approved' && (
+              <Button onClick={() => setShowApprovalModal(true)} className="gap-2"><Check className="h-4 w-4"/>Approve</Button>
+            )}
+            {canApprove && report.status === 'approved' && (
+              <Button variant="destructive" onClick={() => setShowUnapprovalModal(true)} className="gap-2"><X className="h-4 w-4"/>Unapprove</Button>
+            )}
+          </div>
+        </div>
+      </div>
       {/* Header */}
       <div className="sticky top-20 z-30 bg-background/60 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex flex-col gap-3 md:flex-row md:items-center md:justify-between p-2 rounded">
         <div className="flex items-center gap-3">
@@ -644,12 +663,17 @@ export default function ViewReportPage() {
               <div className="text-sm text-muted-foreground">No activity yet</div>
             ) : (
               <ol className="relative border-l ml-2 pl-4">
-                {timeline.map((e: { id: string; created_at: string; action?: string; message?: string; user_name?: string; log_type?: string; level?: 'DEBUG'|'INFO'|'WARNING'|'ERROR'|'CRITICAL' }) => (
+                {timeline.map((e: { id: string; created_at: string; action?: string; message?: string; user_name?: string; log_type?: string; level?: 'DEBUG'|'INFO'|'WARNING'|'ERROR'|'CRITICAL'; details?: Record<string, unknown> | null }) => (
                   <li key={e.id} className="mb-4">
                     <div className={`absolute -left-1.5 h-3 w-3 rounded-full ${e.action?.toLowerCase().includes('approve') ? 'bg-green-600' : e.level === 'WARNING' ? 'bg-amber-500' : e.level === 'ERROR' ? 'bg-red-600' : 'bg-blue-500'}`} />
                     <div className="text-sm">{e.action || e.log_type}</div>
                     <div className="text-xs text-muted-foreground">{new Date(e.created_at).toLocaleString()} {e.user_name ? `• ${e.user_name}` : ''}</div>
                     {e.message && <div className="text-xs">{e.message}</div>}
+                    {e.details && (
+                      <pre className="mt-1 max-h-32 overflow-auto rounded bg-muted p-2 text-[10px]">
+                        {JSON.stringify(e.details, null, 2)}
+                      </pre>
+                    )}
                   </li>
                 ))}
               </ol>
