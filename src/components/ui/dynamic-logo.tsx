@@ -75,7 +75,19 @@ export function DynamicLogo({
             if (parsedValue === 'null' || parsedValue === null || parsedValue === '') {
               parsedValue = undefined
             }
-            
+
+            // Normalize any Supabase storage URLs to current project host
+            if (typeof parsedValue === 'string' && parsedValue.includes('supabase.co')) {
+              try {
+                const currentHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL as string).hostname
+                const u = new URL(parsedValue)
+                if (u.hostname.endsWith('supabase.co') && u.hostname !== currentHost) {
+                  u.hostname = currentHost
+                  parsedValue = u.toString()
+                }
+              } catch {}
+            }
+
             brandingSettings[setting.key as keyof BrandingSettings] = parsedValue as string
           } catch {
             brandingSettings[setting.key as keyof BrandingSettings] = setting.value as string

@@ -29,6 +29,16 @@ export function DynamicFavicon() {
         }
 
         if (faviconUrl) {
+          // Normalize to current Supabase project host if needed
+          try {
+            const currentHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL as string).hostname
+            const u = new URL(faviconUrl)
+            if (u.hostname.endsWith('supabase.co') && u.hostname !== currentHost) {
+              u.hostname = currentHost
+              faviconUrl = u.toString()
+            }
+          } catch {}
+
           // Update favicon
           const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || 
                       document.createElement('link')

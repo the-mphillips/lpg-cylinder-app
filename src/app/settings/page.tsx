@@ -1080,20 +1080,158 @@ function EmailSettingsTab() {
 
 // Placeholder tabs for existing functionality
 function MajorCustomersTab() {
-  const { data: customers, isLoading } = api.admin.getAllCustomers.useQuery()
-  
+  const { data: customers, isLoading, refetch } = api.admin.getAllCustomers.useQuery()
+  const createCustomer = api.admin.createCustomer.useMutation()
+  const updateCustomer = api.admin.updateCustomer.useMutation()
+  const deleteCustomer = api.admin.deleteCustomer.useMutation()
+
+  const [showForm, setShowForm] = useState(false)
+  const [editing, setEditing] = useState<Customer | null>(null)
+  const [form, setForm] = useState({
+    name: '',
+    contact_person: '',
+    contact_email: '',
+    contact_phone: '',
+    address: '',
+    billing_address: '',
+    website: '',
+    is_active: true,
+  })
+
+  useEffect(() => {
+    if (editing) {
+      setForm({
+        name: editing.name || '',
+        contact_person: editing.contact_person || '',
+        contact_email: editing.contact_email || '',
+        contact_phone: editing.contact_phone || '',
+        address: editing.address || '',
+        billing_address: editing.billing_address || '',
+        website: editing.website || '',
+        is_active: Boolean(editing.is_active),
+      })
+      setShowForm(true)
+    }
+  }, [editing])
+
+  const handleSubmit = async () => {
+    try {
+      if (!form.name.trim()) {
+        toast.error('Customer name is required')
+        return
+      }
+
+      if (editing) {
+        await updateCustomer.mutateAsync({
+          id: editing.id,
+          name: form.name,
+          contact_person: form.contact_person || undefined,
+          contact_email: form.contact_email || undefined,
+          contact_phone: form.contact_phone || undefined,
+          address: form.address || undefined,
+          billing_address: form.billing_address || undefined,
+          website: form.website || undefined,
+          is_active: form.is_active,
+        })
+        toast.success('Customer updated')
+      } else {
+        await createCustomer.mutateAsync({
+          name: form.name,
+          contact_person: form.contact_person || undefined,
+          contact_email: form.contact_email || undefined,
+          contact_phone: form.contact_phone || undefined,
+          address: form.address || undefined,
+          billing_address: form.billing_address || undefined,
+          website: form.website || undefined,
+        })
+        toast.success('Customer created')
+      }
+      setShowForm(false)
+      setEditing(null)
+      setForm({
+        name: '', contact_person: '', contact_email: '', contact_phone: '', address: '', billing_address: '', website: '', is_active: true,
+      })
+      await refetch()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save customer')
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this customer?')) return
+    try {
+      await deleteCustomer.mutateAsync({ id })
+      toast.success('Customer deleted')
+      await refetch()
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete customer')
+    }
+  }
+
   if (isLoading) return <div className="p-4">Loading customers...</div>
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Building2 className="h-5 w-5" />
-          Major Customers
+        <CardTitle className="flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <Building2 className="h-5 w-5" />
+            Major Customers
+          </span>
+          <Button onClick={() => { setEditing(null); setShowForm(true) }}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Customer
+          </Button>
         </CardTitle>
         <CardDescription>Manage major customer accounts</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-6">
+        {showForm && (
+          <div className="border rounded-md p-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Name</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Customer name" />
+              </div>
+              <div>
+                <Label>Contact Person</Label>
+                <Input value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} placeholder="Contact person" />
+              </div>
+              <div>
+                <Label>Contact Email</Label>
+                <Input type="email" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} placeholder="email@example.com" />
+              </div>
+              <div>
+                <Label>Contact Phone</Label>
+                <Input value={form.contact_phone} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} placeholder="Phone" />
+              </div>
+              <div>
+                <Label>Address</Label>
+                <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Address" />
+              </div>
+              <div>
+                <Label>Billing Address</Label>
+                <Input value={form.billing_address} onChange={(e) => setForm({ ...form, billing_address: e.target.value })} placeholder="Billing address" />
+              </div>
+              <div>
+                <Label>Website</Label>
+                <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://..." />
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch id="active" checked={form.is_active} onCheckedChange={(checked) => setForm({ ...form, is_active: checked })} />
+                <Label htmlFor="active">Active</Label>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleSubmit} disabled={createCustomer.isPending || updateCustomer.isPending}>
+                <Save className="h-4 w-4 mr-2" />
+                {editing ? 'Save Changes' : 'Create'}
+              </Button>
+              <Button variant="secondary" onClick={() => { setShowForm(false); setEditing(null) }}>Cancel</Button>
+            </div>
+          </div>
+        )}
+
         <Table>
           <TableHeader>
             <TableRow>
@@ -1101,6 +1239,7 @@ function MajorCustomersTab() {
               <TableHead>Contact</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="w-[140px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1113,6 +1252,16 @@ function MajorCustomersTab() {
                   <Badge variant={customer.is_active ? 'default' : 'secondary'}>
                     {customer.is_active ? 'Active' : 'Inactive'}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setEditing(customer)}>
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={() => handleDelete(customer.id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

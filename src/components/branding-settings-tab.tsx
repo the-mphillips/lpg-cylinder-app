@@ -57,17 +57,53 @@ export function BrandingSettingsTab() {
   // Queries
   const { data: systemSettings, isLoading, refetch } = api.admin.getSystemSettings.useQuery()
 
+  const normalizeAssetUrl = (url: string): string => {
+    if (!url) return ''
+    try {
+      const currentHost = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL as string).hostname
+      const parsed = new URL(url)
+      if (parsed.hostname !== currentHost && parsed.hostname.endsWith('supabase.co')) {
+        parsed.hostname = currentHost
+        return parsed.toString()
+      }
+      return url
+    } catch {
+      return url
+    }
+  }
+
   const safeStringValue = (value: unknown): string => {
     if (value === null || value === undefined) return ''
-    if (typeof value === 'string') return value
-    return String(value).replace(/^"|"$/g, '') // Remove surrounding quotes
+    let str = typeof value === 'string' ? value : String(value)
+    // Unwrap double-encoded JSON strings like "value"
+    try {
+      // unwrap repeatedly if necessary
+      // limit to 3 iterations to avoid loops
+      for (let i = 0; i < 3; i++) {
+        if (str.length >= 2 && str.startsWith('"') && str.endsWith('"')) {
+          str = JSON.parse(str)
+        } else {
+          break
+        }
+      }
+    } catch {}
+    return str
   }
 
   const safeObjectValue = <T extends Record<string, string>>(value: unknown, defaultValue: T): T => {
     if (!value) return defaultValue
     if (typeof value === 'object') return { ...defaultValue, ...(value as T) }
     try {
-      const parsed = JSON.parse(String(value))
+      let str = String(value)
+      // unwrap if double-encoded
+      for (let i = 0; i < 3; i++) {
+        if (str.length >= 2 && str.startsWith('"') && str.endsWith('"')) {
+          str = JSON.parse(str)
+        } else {
+          break
+        }
+      }
+      const parsed = JSON.parse(str)
       return { ...defaultValue, ...parsed } as T
     } catch {
       return defaultValue
@@ -92,9 +128,9 @@ export function BrandingSettingsTab() {
       const newVisualSettings = {
         primary_color: safeStringValue(settingsObj.primary_color) || '#3D3D3D',
         secondary_color: safeStringValue(settingsObj.secondary_color) || '#F79226',
-        logo_light_url: safeStringValue(settingsObj.logo_light_url),
-        logo_dark_url: safeStringValue(settingsObj.logo_dark_url),
-        favicon_url: safeStringValue(settingsObj.favicon_url)
+        logo_light_url: normalizeAssetUrl(safeStringValue(settingsObj.logo_light_url)),
+        logo_dark_url: normalizeAssetUrl(safeStringValue(settingsObj.logo_dark_url)),
+        favicon_url: normalizeAssetUrl(safeStringValue(settingsObj.favicon_url))
       }
       
       setCompanyInfo(newCompanyInfo)
@@ -110,8 +146,8 @@ export function BrandingSettingsTab() {
         company_email: safeStringValue(settingsObj.company_email),
         company_address_line1: safeStringValue(settingsObj.company_address_line1),
         company_address_line2: safeStringValue(settingsObj.company_address_line2),
-        logo_url: safeStringValue(settingsObj.logo_url),
-        mark_url: safeStringValue(settingsObj.mark_url)
+        logo_url: normalizeAssetUrl(safeStringValue(settingsObj.logo_url)),
+        mark_url: normalizeAssetUrl(safeStringValue(settingsObj.mark_url))
       }
       
       setReportSettings(newReportSettings)
@@ -142,14 +178,14 @@ export function BrandingSettingsTab() {
       if (JSON.stringify(companyInfo.company_address) !== JSON.stringify(originalCompanyInfo.company_address)) {
         updates.push(updateSystemSetting({
           key: 'company_address',
-          value: JSON.stringify(JSON.stringify(companyInfo.company_address))
+          value: JSON.stringify(companyInfo.company_address)
         }))
       }
       
       if (JSON.stringify(companyInfo.company_contact) !== JSON.stringify(originalCompanyInfo.company_contact)) {
         updates.push(updateSystemSetting({
           key: 'company_contact',
-          value: JSON.stringify(JSON.stringify(companyInfo.company_contact))
+          value: JSON.stringify(companyInfo.company_contact)
         }))
       }
       
