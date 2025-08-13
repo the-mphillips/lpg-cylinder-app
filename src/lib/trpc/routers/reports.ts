@@ -2,6 +2,7 @@ import { createTRPCRouter, authedProcedure, adminProcedure } from '@/lib/trpc/se
 import { TRPCError } from '@trpc/server'
 import { z } from 'zod'
 import { logUserActivity } from '@/lib/utils/unified-logging'
+import { createNotificationForUser } from '@/lib/notifications'
 
 // Base schema for required fields
 const baseReportSchema = z.object({
@@ -178,6 +179,15 @@ export const reportsRouter = createTRPCRouter({
               level: 'INFO'
             }
           );
+          // Notify admins/signatories: simplified notifying creator only here for speed
+          await createNotificationForUser({
+            userId: ctx.user.id,
+            type: 'success',
+            title: 'Report created',
+            message: `Report #${data.report_number} created for ${data.customer || 'customer'}`,
+            link: `/reports/${data.id}`,
+            meta: { report_id: data.id, report_number: data.report_number },
+          })
         } catch (logError) {
           console.error('Failed to log report creation:', logError);
           // Continue with the operation even if logging fails
@@ -340,6 +350,16 @@ export const reportsRouter = createTRPCRouter({
               level: 'INFO'
             }
           );
+          if (data?.id) {
+            await createNotificationForUser({
+              userId: ctx.user.id,
+              type: 'info',
+              title: 'Report updated',
+              message: `Report #${data.report_number} updated`,
+              link: `/reports/${data.id}`,
+              meta: { report_id: data.id, report_number: data.report_number },
+            })
+          }
         } catch (logError) {
           console.error('Failed to log report update:', logError);
           // Continue with the operation even if logging fails
@@ -537,6 +557,14 @@ export const reportsRouter = createTRPCRouter({
               level: 'INFO'
             }
           );
+          await createNotificationForUser({
+            userId: ctx.user.id,
+            type: 'success',
+            title: 'Report approved',
+            message: `Report #${data.report_number} approved`,
+            link: `/reports/${data.id}`,
+            meta: { report_id: data.id, report_number: data.report_number },
+          })
         } catch (logError) {
           console.error('Failed to log report approval:', logError);
           // Continue with the operation even if logging fails

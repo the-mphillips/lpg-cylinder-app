@@ -41,6 +41,7 @@ import { DynamicLogo } from '@/components/ui/dynamic-logo'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { api } from '@/lib/trpc/client'
+import { NotificationBell } from '@/components/notifications/notification-bell'
 
 interface User {
   id: string
@@ -319,6 +320,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
         {/* Right side - Actions and User Menu */}
         <div className="flex items-center gap-4 ml-auto">
           {/* New Report Button */}
+          <NotificationBell />
           <Button asChild size="sm" className="btn-branded">
             <Link href="/reports/new">
               <FilePlus className="h-4 w-4 mr-2" />
