@@ -46,6 +46,13 @@ export function DynamicLogo({
   useEffect(() => {
     async function fetchBrandingSettings() {
       try {
+        // Only fetch branding when a session exists to avoid RLS denials pre-auth
+        const { data: sessionData } = await supabase.auth.getSession()
+        if (!sessionData.session) {
+          setIsLoading(false)
+          return
+        }
+
         const { data, error } = await supabase
           .from('app_settings')
           .select('key, value')

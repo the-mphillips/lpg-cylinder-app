@@ -9,6 +9,9 @@ export function DynamicFavicon() {
   useEffect(() => {
     async function updateFavicon() {
       try {
+        const { data: sessionData } = await supabase.auth.getSession()
+        if (!sessionData.session) return
+
         const { data, error } = await supabase
           .from('app_settings')
           .select('key, value')
