@@ -8,6 +8,7 @@ This document tracks completed work and remaining tasks as we approach productio
 - Supabase integration in place (Auth, DB, Storage); RLS policies may require final review
 - Authentication, dashboard, settings, uploads, and unified logging implemented
 - Reports pages and user/customer admin are next up for polish and completeness
+- Vercel deployment CSP issues resolved - app now loads properly
 
 ## Completed (✓)
 
@@ -23,6 +24,9 @@ This document tracks completed work and remaining tasks as we approach productio
 - ✓ Signature management modal and uploads to Supabase Storage
 - ✓ PDF preview demo and report UI components
 - ✓ Middleware for auth-protected routes
+- ✓ PDF finalization and print CSS polish (headers/footers/page breaks)
+- ✓ Sticky action bars on report forms (New/Edit) with mobile-first design
+- ✓ Content Security Policy fix for Vercel deployment (CSP headers updated)
 
 ## In Progress / To Do ( )
 
@@ -32,7 +36,11 @@ This document tracks completed work and remaining tasks as we approach productio
 - ( ) Users: admin CRUD, role assignment, disable/enable
 - ( ) Customers (major customers): CRUD and association with reports
 - ( ) Advanced search across reports/users/customers with server-side filtering
-- ( ) PDF generation: final production template, pagination, and print CSS polish
+- ( ) Column visibility and density toggle on reports table
+- ( ) Advanced filters and saved views on reports list (nuqs integration)
+- ( ) Image sizes optimization and skeleton loading states
+- ( ) Optimistic updates with undo toasts for report status changes
+- ( ) Sentry spans and exception capture for key user flows
 - ( ) Email system: SMTP settings, send report emails, delivery status
 - ( ) Notifications: in-app toasts and optional email triggers for key events
 - ( ) Performance budget: LCP/FID/CLS monitoring and thresholds
@@ -85,7 +93,8 @@ This document tracks completed work and remaining tasks as we approach productio
 
 ## Deployment
 
-- ( ) Vercel project with env vars set (URL, anon, service role)
+- ✓ Vercel project with env vars set (URL, anon, service role)
+- ✓ CSP headers fixed for proper script loading
 - ( ) Preview deployments with protected access
 - ( ) Error reporting/monitoring (Sentry or similar) optional
 
@@ -100,10 +109,10 @@ This document tracks completed work and remaining tasks as we approach productio
 
 ### Security
 
-- ( ) Content Security Policy (CSP) with strict sources and nonce/sha for inline where needed
-- ( ) Frame protection via `frame-ancestors 'none'` (or allow only trusted origins)
-- ( ) `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` hardened
-- ( ) Strict-Transport-Security (HSTS) with preload (after verifying HTTPS everywhere)
+- ✓ Content Security Policy (CSP) with strict sources and nonce/sha for inline where needed
+- ✓ Frame protection via `frame-ancestors 'none'` (or allow only trusted origins)
+- ✓ `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` hardened
+- ✓ Strict-Transport-Security (HSTS) with preload (after verifying HTTPS everywhere)
 - ( ) CORS locked to required origins; no wildcard in production
 - ( ) Cookies: `Secure`, `HttpOnly`, `SameSite=lax/strict` as applicable
 - ( ) tRPC procedures: server-side Zod validation on all inputs and outputs
