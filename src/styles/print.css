@@ -18,6 +18,12 @@
     print-color-adjust: exact !important;
   }
 
+  /* Links print as black without underline */
+  a {
+    color: black !important;
+    text-decoration: none !important;
+  }
+
   /* Hide everything except the report content when printing */
   body * {
     visibility: hidden;
@@ -41,6 +47,17 @@
     background: white !important;
     transform: none !important;
     scale: none !important;
+  }
+
+  /* Ensure exact A4 box when not using the data attribute */
+  .report-container {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    box-sizing: border-box !important;
+    padding: 5mm !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    break-inside: avoid !important;
   }
 
   /* Typography optimizations */
@@ -149,6 +166,15 @@
   button,
   .print\:hidden {
     display: none !important;
+  }
+
+  /* Page number helper */
+  .page-number {
+    position: fixed !important;
+    bottom: 5mm !important;
+    right: 10mm !important;
+    font-size: 9pt !important;
+    color: black !important;
   }
 
   /* Ensure proper spacing */

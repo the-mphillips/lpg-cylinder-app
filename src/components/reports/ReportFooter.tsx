@@ -41,8 +41,8 @@ export function ReportFooter({
 
   return (
     <div className={cn(
-      "w-full space-y-2",
-      "mt-auto", // Push to bottom of container
+      "report-footer w-full space-y-2",
+      "mt-auto",
       printMode && "print:space-y-2"
     )}>
       {/* Separator Line - moved higher */}

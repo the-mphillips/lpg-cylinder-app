@@ -26,7 +26,7 @@ export function ReportCustomerInfo({
 }: ReportCustomerInfoProps) {
   return (
     <div className={cn(
-      "w-full space-y-1.5",
+      "report-customer-info w-full space-y-1.5",
       printMode && "print:space-y-1.5"
     )}>
       {/* Customer Name Row */}

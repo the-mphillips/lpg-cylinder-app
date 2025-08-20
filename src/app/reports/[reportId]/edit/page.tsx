@@ -460,7 +460,7 @@ export default function EditReportPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 max-w-6xl">
+    <div className="container mx-auto p-4 max-w-6xl pb-24">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Edit Report - {report.report_number}</h1>
         <Button asChild variant="outline">
@@ -1019,43 +1019,45 @@ export default function EditReportPage() {
             </CardContent>
           </Card>
 
-          {/* Action Buttons */}
-          <div className="flex justify-between items-center">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handlePreview}
-              className="gap-2"
-            >
-              <Eye className="h-4 w-4" />
-              Preview
-            </Button>
-
-            <div className="flex space-x-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  updateReportMutation.mutate({
-                    id: reportId,
-                    status: 'draft' as const,
-                  })
-                }}
-                disabled={updateReportMutation.status === 'pending'}
-                className="gap-2"
-              >
-                <Save className="h-4 w-4" />
-                Save as Draft
-              </Button>
-
-              <Button
-                type="submit"
-                disabled={updateReportMutation.status === 'pending'}
-                className="gap-2"
-              >
-                <Save className="h-4 w-4" />
-                {updateReportMutation.status === 'pending' ? 'Saving...' : 'Save Changes'}
-              </Button>
+          {/* Action Bar (Sticky) */}
+          <div className="sticky bottom-0 left-0 right-0 z-40 mt-6">
+            <div className="border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+              <div className="flex items-center justify-between gap-2 p-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handlePreview}
+                  className="gap-2"
+                  aria-label="Preview report"
+                >
+                  <Eye className="h-4 w-4" />
+                  Preview
+                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      updateReportMutation.mutate({ id: reportId, status: 'draft' as const })
+                    }}
+                    disabled={updateReportMutation.status === 'pending'}
+                    className="gap-2"
+                    aria-label="Save as draft"
+                  >
+                    <Save className="h-4 w-4" />
+                    Save as Draft
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={updateReportMutation.status === 'pending'}
+                    className="gap-2"
+                    aria-label="Save changes"
+                  >
+                    <Save className="h-4 w-4" />
+                    {updateReportMutation.status === 'pending' ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </form>

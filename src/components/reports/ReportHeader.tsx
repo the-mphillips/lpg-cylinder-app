@@ -45,7 +45,7 @@ export function ReportHeader({ printMode = false }: ReportHeaderProps) {
 
   return (
     <div className={cn(
-      "grid grid-cols-[35%_25%_10%_27%] gap-2 items-start mb-1",
+      "report-header grid grid-cols-[35%_25%_10%_27%] gap-2 items-start mb-1",
       "w-full",
       printMode && "print:grid"
     )}>

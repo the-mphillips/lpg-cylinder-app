@@ -113,6 +113,26 @@ export function ReportPDFModal({
     }
   }
 
+  const validateFit = useCallback(() => {
+    if (!previewRef.current) return
+    try {
+      const pxPerMm = 96 / 25.4
+      const allowedHeightPx = 297 * pxPerMm
+      const contentHeightPx = previewRef.current.scrollHeight
+      if (contentHeightPx <= allowedHeightPx) {
+        toast.success('PDF layout validation passed', {
+          description: `Content height ${Math.round(contentHeightPx)}px ≤ A4 ${Math.round(allowedHeightPx)}px`
+        })
+      } else {
+        toast.warning('Content may overflow A4 page', {
+          description: `Content height ${Math.round(contentHeightPx)}px > A4 ${Math.round(allowedHeightPx)}px`
+        })
+      }
+    } catch (e) {
+      toast.error('Validation failed', { description: e instanceof Error ? e.message : 'Unknown error' })
+    }
+  }, [])
+
   const generateBatchPDFs = async () => {
     if (batchReports.length === 0) {
       toast.error('No reports selected for batch generation')
@@ -412,6 +432,11 @@ export function ReportPDFModal({
                   style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'top left' }}
                 >
                   <div ref={previewRef} data-pdf-content>
+                    <div className="flex items-center justify-end mb-2 print:hidden">
+                      <Button variant="outline" size="sm" onClick={validateFit} aria-label="Validate PDF fits on one A4 page">
+                        Validate Fit
+                      </Button>
+                    </div>
                     <ReportPreview 
                       data={currentReport} 
                       printMode={previewMode}

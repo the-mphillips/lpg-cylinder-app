@@ -149,6 +149,10 @@ export function ReportPreview({ data, className, printMode = false }: ReportPrev
         signatureFile={data.approved_signatory_signature}
         printMode={printMode}
       />
+      {/* Page number helper (optional) */}
+      {printMode && (
+        <div className="page-number">Page</div>
+      )}
     </div>
   )
 } 

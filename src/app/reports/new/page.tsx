@@ -535,7 +535,7 @@ export default function NewReportPage() {
   const secondTesterValue = form.watch('secondTester')
 
   return (
-    <div className="container mx-auto p-4 max-w-6xl">
+    <div className="container mx-auto p-4 max-w-6xl pb-24">
       <h1 className="text-2xl font-bold mb-6">New Report</h1>
 
       <Form {...form}>
@@ -1125,52 +1125,57 @@ export default function NewReportPage() {
             </CardContent>
           </Card>
 
-          {/* Action Buttons */}
-          <div className="flex justify-between items-center">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleReset}
-              className="gap-2"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Reset Form
-            </Button>
-            
-            <div className="flex space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setPreviewData(form.getValues())
-                  setIsPreviewOpen(true)
-                }}
-                className="gap-2"
-              >
-                <Eye className="h-4 w-4" />
-                Preview
-              </Button>
-              
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={handleSaveAsDraft}
-                disabled={createReportMutation.status === 'pending'}
-                className="gap-2"
-              >
-                <Save className="h-4 w-4" />
-                Save as Draft
-              </Button>
-              
-              <Button
-                type="button"
-                onClick={handleFinalSubmit}
-                disabled={createReportMutation.status === 'pending'}
-                className="gap-2"
-              >
-                <Save className="h-4 w-4" />
-                {createReportMutation.status === 'pending' ? 'Submitting...' : 'Submit Report'}
-              </Button>
+          {/* Action Bar (Sticky) */}
+          <div className="sticky bottom-0 left-0 right-0 z-40 mt-6">
+            <div className="border-t bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+              <div className="flex items-center justify-between gap-2 p-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleReset}
+                  className="gap-2"
+                  aria-label="Reset form"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Reset Form
+                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setPreviewData(form.getValues())
+                      setIsPreviewOpen(true)
+                    }}
+                    className="gap-2"
+                    aria-label="Preview report"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Preview
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleSaveAsDraft}
+                    disabled={createReportMutation.status === 'pending'}
+                    className="gap-2"
+                    aria-label="Save report as draft"
+                  >
+                    <Save className="h-4 w-4" />
+                    Save as Draft
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleFinalSubmit}
+                    disabled={createReportMutation.status === 'pending'}
+                    className="gap-2"
+                    aria-label="Submit report"
+                  >
+                    <Save className="h-4 w-4" />
+                    {createReportMutation.status === 'pending' ? 'Submitting...' : 'Submit Report'}
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
 
