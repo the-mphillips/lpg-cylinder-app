@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { useForm } from "react-hook-form"
+import { useForm, type SubmitHandler, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 
@@ -74,9 +74,9 @@ const reportBaseSchema = z.object({
   secondTester: z.string().optional(),
   thirdTester: z.string().optional(),
   notes: z.string().optional(),
-  equipment_used: z.array(z.string()).optional().default([]),
-  images: z.array(z.string()).optional().default([]),
-  cylinders: z.array(cylinderSchema).optional().default([{
+  equipment_used: z.array(z.string()).default([]),
+  images: z.array(z.string()).default([]),
+  cylinders: z.array(cylinderSchema).default([{
     cylinderNo: '',
     cylinderSpec: '',
     wc: '',
@@ -184,7 +184,7 @@ export default function EditReportPage() {
 
   // Initialize form with default values
   const form = useForm<ReportFormData>({
-    resolver: zodResolver(finalReportSchema),
+    resolver: zodResolver(finalReportSchema) as Resolver<ReportFormData>,
     defaultValues: {
       customerType: '',
       majorCustomer: '',
@@ -372,7 +372,7 @@ export default function EditReportPage() {
     }
   }, [report, formDefaults, form])
 
-  const onSubmit = async (values: ReportFormData) => {
+  const onSubmit: SubmitHandler<ReportFormData> = async (values) => {
     try {
       // Transform form data to match API requirements
       const reportData = {

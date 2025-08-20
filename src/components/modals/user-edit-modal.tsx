@@ -40,9 +40,7 @@ const userFormSchema = z.object({
   last_name: z.string().min(1, "Last name is required"),
   phone: z.string().optional(),
   department: z.string().optional(),
-  role: z.enum(['Tester', 'Admin', 'Super Admin', 'Authorised Signatory'] as const, {
-    required_error: "Please select a role",
-  }),
+  role: z.enum(['Tester', 'Admin', 'Super Admin', 'Authorised Signatory'] as const),
   is_active: z.boolean(),
 })
 

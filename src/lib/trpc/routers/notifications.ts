@@ -57,7 +57,7 @@ export const notificationsRouter = createTRPCRouter({
   }),
 
   create: adminProcedure
-    .input(z.object({ userId: z.string(), type: z.enum(['info','success','warning','error','system']), title: z.string(), message: z.string(), link: z.string().optional(), meta: z.record(z.unknown()).optional() }))
+    .input(z.object({ userId: z.string(), type: z.enum(['info','success','warning','error','system']), title: z.string(), message: z.string(), link: z.string().optional(), meta: z.record(z.string(), z.unknown()).optional() }))
     .mutation(async ({ ctx, input }) => {
       const { data, error } = await ctx.supabaseService
         .from('notifications')
@@ -92,7 +92,7 @@ export const notificationsRouter = createTRPCRouter({
       mute_all: z.boolean().optional(),
       toast_enabled: z.boolean().optional(),
       email_enabled: z.boolean().optional(),
-      types: z.record(z.boolean()).optional(),
+      types: z.record(z.string(), z.boolean()).optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       // Merge into users.notification_settings

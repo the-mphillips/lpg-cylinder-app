@@ -1,4 +1,6 @@
 import type { NextConfig } from "next";
+import bundleAnalyzer from '@next/bundle-analyzer'
+import * as Sentry from '@sentry/nextjs'
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
@@ -45,8 +47,7 @@ const nextConfig: NextConfig = {
 
     const cspDirectives = [
       "default-src 'self'",
-      // Allow Next internal scripts and inline styles when necessary; consider tightening with nonces in future
-      "script-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'strict-dynamic' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
       `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https:`,
       "img-src 'self' data: blob: https:",
@@ -74,4 +75,8 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const withBundleAnalyzer = bundleAnalyzer({ enabled: process.env.ANALYZE === 'true' })
+
+export default Sentry.withSentryConfig(withBundleAnalyzer(nextConfig), {
+  silent: true,
+})

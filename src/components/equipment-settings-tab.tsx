@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, type SubmitHandler, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { PlusCircle, Trash2, Edit } from "lucide-react"
@@ -52,10 +52,13 @@ import { Textarea } from "@/components/ui/textarea"
 const equipmentFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
   description: z.string().optional(),
-  cost_price: z.preprocess(
-    (val) => (String(val).trim() === '' ? undefined : Number(val)),
-    z.number({ invalid_type_error: "Cost must be a number." }).min(0, "Cost must be a positive number.").optional()
-  ),
+  cost_price: z
+    .preprocess((val) => {
+      const str = String(val ?? '').trim()
+      if (str === '') return undefined
+      const n = Number(str)
+      return Number.isNaN(n) ? undefined : n
+    }, z.number().min(0, "Cost must be a positive number.")).optional(),
 })
 
 type EquipmentForm = z.infer<typeof equipmentFormSchema>
@@ -92,7 +95,7 @@ export function EquipmentSettingsTab() {
   const { data: equipmentList, isLoading } = api.equipment.list.useQuery()
 
   const form = useForm<EquipmentForm>({
-    resolver: zodResolver(equipmentFormSchema),
+    resolver: zodResolver(equipmentFormSchema) as Resolver<EquipmentForm>,
     defaultValues: {
       name: "",
       description: "",
@@ -157,7 +160,7 @@ export function EquipmentSettingsTab() {
     setIsFormDialogOpen(true)
   }
 
-  const onSubmit = (values: EquipmentForm) => {
+  const onSubmit: SubmitHandler<EquipmentForm> = (values) => {
     if (selectedEquipment) {
       updateMutation.mutate({ ...values, id: selectedEquipment.id })
     } else {

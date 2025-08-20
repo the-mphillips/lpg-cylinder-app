@@ -55,7 +55,7 @@ export const settingsRouter = createTRPCRouter({
   update: authedProcedure
     .input(z.object({
         category: z.string(),
-        settings: z.record(z.unknown()),
+        settings: z.record(z.string(), z.unknown()),
     }))
     .mutation(async ({ ctx, input }) => {
         await updateAppSettingsInDb(ctx.supabase, input.category, input.settings);

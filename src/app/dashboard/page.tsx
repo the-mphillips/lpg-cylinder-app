@@ -53,15 +53,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  Area,
-  AreaChart,
-  ResponsiveContainer,
-  Tooltip as RechartsTooltip,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-} from "recharts"
+import dynamic from 'next/dynamic'
 import { api } from "@/lib/trpc/client"
 
 // Date formatting function for notifications
@@ -128,11 +120,7 @@ interface NotificationData {
   timestamp: string
 }
 
-interface TooltipProps {
-  active?: boolean
-  payload?: Array<{ value: number }>
-  label?: string
-}
+// Tooltip moved into dynamically imported components
 
 export default function Dashboard() {
   const router = useRouter()
@@ -264,21 +252,8 @@ export default function Dashboard() {
     return Math.round((approved / total) * 100)
   }, [data?.reportStatistics])
 
-  const MiniSpark = ({ dataKey }: { dataKey: 'count' | 'approved' }) => (
-    <div className="h-8 mt-2">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={trend.slice(-8)}>
-          <defs>
-            <linearGradient id={`mini-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.7} />
-              <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <Area type="monotone" dataKey={dataKey} stroke="hsl(var(--primary))" fill={`url(#mini-${dataKey})`} strokeWidth={1.5} />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  )
+  const ReportTrendChart = dynamic(() => import('./report-trend-chart'), { ssr: false })
+  const MiniSpark = dynamic(() => import('./report-trend-spark'), { ssr: false })
 
   // Memoize sort to avoid re-sorts
   const sortedReports = useMemo(() => (data?.recentReports ? [...data.recentReports].sort((a, b) => {
@@ -339,17 +314,7 @@ export default function Dashboard() {
     return status === 'submitted' ? 'Pending' : status.charAt(0).toUpperCase() + status.slice(1)
   }
 
-  const CustomTooltip = ({ active, payload, label }: TooltipProps) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-background p-2 rounded-lg shadow-md border">
-          <p className="text-sm font-semibold">{`Date: ${label}`}</p>
-          <p className="text-sm text-primary">{`Reports: ${payload[0].value}`}</p>
-        </div>
-      )
-    }
-    return null
-  }
+  // Tooltip moved into dynamically imported components
 
   if (isLoading) {
     return (
@@ -422,7 +387,7 @@ export default function Dashboard() {
                   </span>
                 )}
               </div>
-              <MiniSpark dataKey="count" />
+              <MiniSpark data={trend.slice(-8)} dataKey="count" />
             </CardContent>
           </Card>
 
@@ -456,7 +421,7 @@ export default function Dashboard() {
                   </span>
                 )}
               </div>
-              <MiniSpark dataKey="approved" />
+              <MiniSpark data={trend.slice(-8)} dataKey="approved" />
             </CardContent>
           </Card>
 
@@ -611,47 +576,7 @@ export default function Dashboard() {
               <CardDescription>Monthly report submission trends</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={data.reportTrend}>
-                     <defs>
-                      <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
-                      </linearGradient>
-                       <linearGradient id="colorApproved" x1="0" y1="0" x2="0" y2="1">
-                         <stop offset="5%" stopColor="#16a34a" stopOpacity={0.7}/>
-                         <stop offset="95%" stopColor="#16a34a" stopOpacity={0}/>
-                       </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis 
-                      dataKey="formatted_date" 
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                    />
-                    <YAxis 
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                    />
-                    <RechartsTooltip content={<CustomTooltip />} />
-                     <Area 
-                      type="monotone" 
-                      dataKey="count" 
-                      stroke="hsl(var(--primary))" 
-                      fillOpacity={1} 
-                      fill="url(#colorCount)" 
-                    />
-                     <Area 
-                       type="monotone" 
-                       dataKey="approved" 
-                       stroke="#16a34a" 
-                       fillOpacity={1} 
-                       fill="url(#colorApproved)" 
-                     />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
+              <ReportTrendChart data={data.reportTrend} />
             </CardContent>
           </Card>
         )}

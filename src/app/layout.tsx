@@ -1,4 +1,15 @@
 import "./globals.css";
+import localFont from 'next/font/local'
+
+const geistSans = localFont({
+  src: [
+    { path: '../../public/static/static/fonts/Arial.ttf', weight: '400', style: 'normal' },
+    { path: '../../public/static/static/fonts/Arial-Bold.ttf', weight: '700', style: 'normal' },
+  ],
+  variable: '--font-sans',
+  display: 'swap',
+  preload: true,
+})
 import { Toaster } from 'sonner'
 
 import { TRPCProvider } from "@/components/providers/trpc-provider";
@@ -22,7 +33,7 @@ export default function RootLayout({
           </>
         ) : null}
       </head>
-      <body>
+      <body className={`${geistSans.variable}`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

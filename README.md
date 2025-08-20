@@ -45,6 +45,15 @@ Visit http://localhost:3000
 
 For detailed Storage/RLS setup, see `SUPABASE_SETUP.md`.
 
+### Sentry (optional)
+
+Set DSN to enable error and performance monitoring:
+
+```env
+NEXT_PUBLIC_SENTRY_DSN=your_sentry_dsn
+SENTRY_DSN=your_sentry_dsn
+```
+
 ## Useful Scripts
 
 ```bash
@@ -52,6 +61,7 @@ npm run dev      # Start development server
 npm run build    # Build for production
 npm run start    # Start production server
 npm run lint     # Lint and type-check
+npm run analyze  # Build with bundle analyzer (ANALYZE=true)
 ```
 
 ## Project Structure (high level)
