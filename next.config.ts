@@ -47,15 +47,18 @@ const nextConfig: NextConfig = {
 
     const cspDirectives = [
       "default-src 'self'",
-      "script-src 'self' 'strict-dynamic' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://vercel.live https://vercel.com",
+      "script-src-elem 'self' 'unsafe-inline' https://vercel.live https://vercel.com",
       "style-src 'self' 'unsafe-inline'",
-      `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https:`,
+      `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https: wss:`,
       "img-src 'self' data: blob: https:",
       "font-src 'self' data: https:",
       "media-src 'self' data: blob: https:",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
+      "worker-src 'self' blob:",
+      "child-src 'self' blob:",
     ].join('; ')
 
     headers.push({
